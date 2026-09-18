@@ -136,8 +136,17 @@ the right behavior is tested. CI also runs the recorder and retains its snapshot
 Reports are execution evidence, not tamper-proof audit records or independent
 proof of chronology; user review remains a separate check. Snapshot after approved test
 changes and before implementation. Preserve the earlier snapshot and logs.
-CI replays 34 initial feature tests from six frozen RED checkpoints on both
-platforms using scripts/replay_red.py; current application tests must pass GREEN.
+CI verifies frozen RED checkpoints with scripts/replay_red.py `--verify` on every
+push and pull request (Ubuntu and Windows, Python 3.14); the full 42-test replay
+executes nightly and on manual `workflow_dispatch` (Ubuntu/Windows × 3.12/3.14).
+A group is admitted only for a `tests/app` file with a checkpoint commit whose
+current bytes equal the checkpoint bytes; `--verify` enforces revision, byte
+identity, and count on every event. Permitted failure markers (`AssertionError` /
+`NotImplementedError`) are a human/execute rule via `validate_report`, not a
+`--verify` check. A changed replayed test needs a new test-only checkpoint commit
+and a `GROUPS` update; `--verify` fails until the reference is updated. Nightly
+execution catches toolchain drift (Python/pytest/`uv.lock`) and regenerates
+retained evidence.
 The replay validates historical snapshots, not chronology by itself. Review
 regression RED remains in local logs. Preserve checkpoint commits when merging;
 if approved tests change, establish replacement RED evidence before updating

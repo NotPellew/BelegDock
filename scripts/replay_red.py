@@ -21,6 +21,8 @@ GROUPS = (
     ("workflow", "0c57455", "test_workflow.py", 12, {"NotImplementedError"}),
     ("commands", "a79ffc4", "test_cli_workflow.py", 5, {"AssertionError"}),
     ("login", "afc60ac", "test_login.py", 3, {"AssertionError", "NotImplementedError"}),
+    ("integration_validation", "052c772", "test_integration_validation.py", 4, {"AssertionError"}),
+    ("workflow_recovery", "2cb17cd", "test_workflow_recovery.py", 4, {"NotImplementedError"}),
 )
 
 
@@ -51,6 +53,25 @@ def identities(test_path, data):
                     names.add(f"{module}.{item.name}.{method.name}")
                     nodes.add(f"{test_path}::{item.name}::{method.name}")
     return names, nodes
+
+
+def verify(repo):
+    for name, checkpoint, filename, count, allowed in GROUPS:
+        revision = subprocess.check_output(
+            ["git", "rev-parse", checkpoint], cwd=repo, text=True).strip()
+        test_path = "tests/app/" + filename
+        archived = subprocess.check_output(["git", "archive", revision, test_path], cwd=repo)
+        with tarfile.open(fileobj=io.BytesIO(archived)) as archive:
+            member = archive.extractfile(test_path)
+            if member is None:
+                raise ValueError(f"{name}: test differs from its approved checkpoint")
+            frozen = member.read()
+        if frozen != (repo / test_path).read_bytes():
+            raise ValueError(f"{name}: test differs from its approved checkpoint")
+        expected_names, _ = identities(test_path, frozen)
+        if len(expected_names) != count:
+            raise ValueError(f"{name}: unexpected test count")
+    print(f"Verified {len(GROUPS)} frozen RED groups")
 
 
 def replay(repo, output):
@@ -104,12 +125,21 @@ def replay(repo, output):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Replay the six frozen initial feature RED checkpoints")
+    parser = argparse.ArgumentParser(
+        description="Replay the eight frozen feature RED checkpoints, or --verify them without executing pytest")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    if args.verify and args.output is not None:
+        parser.error("--verify and --output are mutually exclusive")
+    if not args.verify and args.output is None:
+        parser.error("--output is required unless --verify is used")
     try:
-        replay(args.repo.resolve(strict=True), args.output)
+        if args.verify:
+            verify(args.repo.resolve(strict=True))
+        else:
+            replay(args.repo.resolve(strict=True), args.output)
     except (OSError, ValueError, ET.ParseError, subprocess.SubprocessError) as error:
         print(f"RED replay failed: {error}", file=sys.stderr)
         return 1
