@@ -32,4 +32,8 @@ fixtures or put credentials in this repository.
 - Use the [GitHub feature-request form](https://github.com/NotPellew/BelegDock/issues/new?template=feature.yml)
   to propose work. Refine the issue before implementation and link its pull request.
 
+A Linux-only developer launcher now protects established tests in a separate CLI
+session. It has no Python package dependencies; see AGENTS.md for requirements,
+commands, and limits. Native Windows protection and CI are still pending.
+
 An open-source license must be selected before public distribution.

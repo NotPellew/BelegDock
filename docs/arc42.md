@@ -1,7 +1,8 @@
 # BelegDock architecture
 
-Accepted direction, not an implementation report. The application and verification
-infrastructure are not implemented yet.
+The application is not implemented yet. The Linux developer-session protection
+described below is implemented and locally verified; the full verifier and CI
+remain pending.
 
 ## 1. Introduction and goals
 
@@ -69,6 +70,11 @@ Start with an installable Python package. Standalone executables may follow.
 Verify installation and the built CLI on Windows and Linux. User data, credentials,
 and host-specific development permissions are separate from repository contents.
 
+Developer isolation currently requires Linux and Bubblewrap; native Windows
+fails explicitly. This limitation does not change the application's platform
+targets. System runtimes and the checkout are exposed; the normal home directory
+and host sockets are not. The session gets a temporary home and /tmp.
+
 ## 8. Crosscutting concepts
 
 - SQLite holds processing state; ordinary files hold original attachment bytes.
@@ -82,6 +88,12 @@ and host-specific development permissions are separate from repository contents.
   of logs and test fixtures.
 - Treat filenames/content as untrusted. Define safe paths and size limits before
   accepting external attachments. Never execute attachments.
+- The protected developer CLI mounts the checkout read-only at /workspace and
+  permits writes only to src/, docs/, and README.md. It drops capabilities and
+  prevents nested user namespaces. Refuse checkout symlinks, special files, and
+  writable hardlinks so aliases cannot make established tests editable. The
+  trusted host applies approved test changes between sessions. Network is off
+  unless explicitly enabled; network-enabled sessions can reach host TCP services.
 
 ## 9. Architecture decisions
 
@@ -95,6 +107,7 @@ and host-specific development permissions are separate from repository contents.
 | OS credential store | Keeps secrets out of ordinary config | A supported environment needs an explicitly agreed alternative |
 | GitHub issues and PRs | One feature specification and linked delivery evidence | Hosting requirements change |
 | Protected tests and RED/GREEN records | Prevent silent test changes; requires host enforcement and CI | Verification exposes a gap |
+| Bubblewrap for the initial Linux boundary | Small launcher using OS mounts; no new service | Windows implementation or runtime compatibility requires another backend |
 
 ## 10. Quality requirements
 
@@ -110,8 +123,12 @@ and host-specific development permissions are separate from repository contents.
 
 ## 11. Risks and open work
 
-- Bootstrap package tooling, protected test execution, verifier, and CI.
-  None is verified yet; repository instructions alone do not enforce permissions.
+- Bootstrap package tooling, the full evidence verifier, and CI. Linux protection
+  passed 14 tests on the current host; verify each additional host separately.
+  Windows enforcement, persistent CLI authentication, and real agent-session
+  integration remain unverified. The existing desktop task is outside the
+  protected session. Symlink-based environments and linked worktrees are currently
+  unsupported; avoid concurrent host edits during validation and execution.
 - Prove Gmail reading, Lexware upload/recovery, and the combined workflow using
   test accounts before investing in public Gmail onboarding.
 - Before public release, establish Gmail distribution requirements and Lexware
