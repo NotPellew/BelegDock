@@ -9,7 +9,7 @@ from typing import Any
 
 from . import __version__, accounts
 from .integrations import GmailAdapter, LexwareAdapter
-from .workflow import Store
+from .workflow import DocumentRejected, Store
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
@@ -72,6 +72,12 @@ def make_parser() -> argparse.ArgumentParser:
     commands.add_parser("documents", help="List local documents and transfer states")
     upload = commands.add_parser("upload", help="Explicitly upload one staged hash")
     upload.add_argument("hash")
+    recover = commands.add_parser("recover-upload", help="Mark an interrupted local upload as uncertain")
+    recover.add_argument("hash")
+    reconcile = commands.add_parser("reconcile", help="Verify a known remote document before recording it")
+    reconcile.add_argument("hash")
+    reconcile.add_argument("--file-id", required=True)
+    reconcile.add_argument("--voucher-id", required=True)
     return parser
 
 
@@ -103,8 +109,20 @@ def dispatch(args: argparse.Namespace) -> Any:
             return store.upload(args.hash, remote.upload)
         finally:
             client = getattr(remote, "client", None)
-            if client is not None:
-                client.close()
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
+    if args.command == "recover-upload":
+        return store.recover_upload(args.hash)
+    if args.command == "reconcile":
+        remote = lexware_client()
+        try:
+            return store.reconcile(args.hash, args.file_id, args.voucher_id, remote.verify_existing)
+        finally:
+            client = getattr(remote, "client", None)
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
     raise ValueError("Choose a command from --help.")
 
 
@@ -121,11 +139,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = dispatch(args)
         print(json.dumps(result, ensure_ascii=True))
         return 0
+    except DocumentRejected as error:
+        print(
+            f"Upload rejected by Lexware (HTTP {error.status_code}); correct the document and stage new bytes.",
+            file=sys.stderr,
+        )
+        return 1
     except Exception:
         if args.command == "stage":
             message = "Staging failed; check selection, connection, file size, and local storage."
         elif args.command == "upload":
             message = "Upload failed; inspect documents. Uncertain outcomes require manual reconciliation before retry."
+        elif args.command == "recover-upload":
+            message = "Recovery failed; an active upload cannot be recovered. Inspect documents before reconciliation."
+        elif args.command == "reconcile":
+            message = "Reconciliation failed; the document remains uncertain. Do not retry the upload."
         elif args.command.startswith("login"):
             message = "Connection failed; check the native credential store and account/client setup."
         else:

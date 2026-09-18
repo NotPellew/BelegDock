@@ -3,6 +3,9 @@ import binascii
 from collections.abc import Mapping
 from pathlib import PurePath
 from typing import Any
+from urllib.parse import quote
+
+from .workflow import DocumentRejected
 
 
 MAX_FILE_SIZE = 5_000_000
@@ -127,6 +130,8 @@ class LexwareAdapter:
             files={"file": (filename, data, mime_type)},
             timeout=30,
         )
+        if response.status_code in {400, 406}:
+            raise DocumentRejected(response.status_code)
         if response.status_code != 202:
             raise RuntimeError("Lexware upload failed")
         result = response.json()
@@ -139,3 +144,38 @@ class LexwareAdapter:
         ):
             raise ValueError("Lexware upload response is invalid")
         return {"id": result["id"], "voucherId": result["voucherId"]}
+
+    def verify_existing(self, file_id: str, voucher_id: str) -> bytes:
+        if not isinstance(file_id, str) or not file_id or not isinstance(voucher_id, str) or not voucher_id:
+            raise ValueError("remote IDs are invalid")
+        file_response = self.client.get(
+            f"https://api.lexware.io/v1/files/{quote(file_id, safe='')}",
+            headers={"Accept": "*/*"},
+            timeout=30,
+        )
+        if file_response.status_code != 200 or not isinstance(file_response.content, bytes):
+            raise RuntimeError("Lexware file verification failed")
+        voucher_response = self.client.get(
+            f"https://api.lexware.io/v1/vouchers/{quote(voucher_id, safe='')}", timeout=30
+        )
+        if voucher_response.status_code != 200:
+            raise RuntimeError("Lexware voucher verification failed")
+        voucher = voucher_response.json()
+        if (
+            not isinstance(voucher, dict)
+            or voucher.get("id") != voucher_id
+            or not self._voucher_references_file(voucher.get("files"), file_id)
+        ):
+            raise RuntimeError("Lexware voucher does not reference the file")
+        return file_response.content
+
+    @staticmethod
+    def _voucher_references_file(files: Any, file_id: str) -> bool:
+        if not isinstance(files, list):
+            return False
+        for item in files:
+            if item == file_id:
+                return True
+            if isinstance(item, Mapping) and (item.get("id") == file_id or item.get("fileId") == file_id):
+                return True
+        return False

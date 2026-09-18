@@ -1,9 +1,11 @@
 # BelegDock architecture
 
 An early CLI and Linux developer boundary are implemented. Offline verification
-covers the transfer workflow. Live Gmail PDF retrieval/staging and mailbox
-preservation passed. Lexware accepted one selected PDF; local no-resend and
-server duplicate behavior passed. Public release remains a separate gate. See README for current user commands.
+covers the transfer workflow. Live Gmail retrieval/staging and mailbox preservation
+passed. Lexware accepted plain PDF, ZUGFeRD PDF and corrected standalone XML;
+local no-resend and plain-PDF server duplicate behavior passed. A malformed XML
+was rejected. Public release remains a separate gate. See README for current
+user commands.
 
 ## 1. Introduction and goals
 
@@ -60,7 +62,8 @@ These are module responsibilities, not separate services or a plugin system.
 2. Stage selected bytes durably and compute their SHA-256 hashes.
 3. Record document identity and every source occurrence.
 4. Upload only explicitly selected documents and retain returned identifiers.
-5. Distinguish confirmed success, failure, and an uncertain remote outcome.
+5. Record documented HTTP 400/406 rejections separately from uncertain remote outcomes.
+6. Reconcile an uncertain result only through explicit remote file and voucher reads.
 
 The upload spike must establish recovery after an ambiguous result before
 automatic retries are introduced. A local transaction cannot include an HTTP
@@ -106,6 +109,7 @@ and host sockets are not. The session gets a temporary home and /tmp.
 | One package/process | Simple operation and testing | A demonstrated need for separate deployment |
 | SQLite state plus files | Local transactions without a server; files remain accessible | Shared concurrent access or recovery evidence warrants change |
 | Hash-based deduplication | Deterministic; changed bytes remain distinct | Proven need for invoice-level matching |
+| Per-document upload lock | Distinguish a live local upload from a lock-free crash remnant | A portable locking limitation is found |
 | Staging before retention | Proves reliable transfer before archive features | Upload/recovery works and retention policy is defined |
 | OS credential store | Keeps secrets out of ordinary config | A supported environment needs an explicitly agreed alternative |
 | GitHub issues and PRs | One feature specification and linked delivery evidence | Hosting requirements change |
@@ -133,16 +137,31 @@ and host sockets are not. The session gets a temporary home and /tmp.
   and linked worktrees are unsupported; avoid concurrent host edits.
 - The initial Gmail adapter refuses malformed parts, including empty part IDs.
   Real account/provider edge cases remain to be established.
-- Interrupted uploads remain uploading/uncertain and cannot be resent. Manual
-  investigation is supported operationally; a reconciliation command is deferred.
+- HTTP 400/406 responses from the files endpoint are documented local rejections;
+  other HTTP errors, transport failures and malformed success responses remain
+  uncertain. A rejected hash is never resent; corrected bytes are a new staged
+  document. `recover-upload` can move only a lock-free `uploading` record to
+  uncertain after a local process has ended. It does not prove a remote outcome
+  or authorize a retry. `reconcile` reads the operator-supplied file and voucher,
+  requires the voucher to reference that file, and compares downloaded bytes to
+  the staged hash before recording IDs. It leaves failures uncertain. A remote
+  absence search and retry after uncertainty remain deferred.
+  The first start against an older state database must run alone to apply its local
+  schema upgrade; a concurrent first start fails before any remote request.
   Windows flushes file bytes, while POSIX also flushes the containing directory.
   Power-loss durability and backup restoration need separate validation.
 - Live Gmail PDF reading/staging and repeated-run deduplication passed with two
   synthetic messages. Labels and original message bytes remained unchanged.
   Attachment IDs varied between reads; use message/part IDs for occurrences.
   The selected PDF reached Lexware (202); repeating locally made no new request,
-  and a deliberate server repeat returned identical file/voucher IDs. Live XML
-  and manual reconciliation after an uncertain outcome remain unverified.
+  and a deliberate server repeat returned identical file/voucher IDs. A provided
+  ZUGFeRD PDF containing factur-x.xml was also accepted (202), with no local resend.
+  The standalone XML failed local syntax parsing and Lexware rejected it (406).
+  Its corrected copy was accepted (202) through the renamed Rechnungen label;
+  repeating the local upload made no request. All selected attachments retained
+  their original bytes; Gmail remained unchanged.
+  Acceptance does not prove invoice conformance or completed bookkeeping.
+  Manual reconciliation remains unverified.
 - Before public release, establish Gmail distribution requirements and Lexware
   API/key usage terms for this application; select an open-source license.
 - Define exact supported OS versions, cleanup policy,

@@ -6,10 +6,12 @@ Lexware Office without changing the mailbox.
 ## Status
 
 Early feasibility build, not a production release. Offline tests cover selection,
-staging, duplicates and uncertain uploads. A live Gmail test staged two synthetic
-PDFs without changing labels or original messages. One selected PDF reached
-Lexware; local repeat-upload and server duplicate checks passed. XML has offline
-coverage; its live upload remains unverified.
+staging, duplicates and uncertain uploads. Live Gmail-to-Lexware tests accepted
+plain PDF, ZUGFeRD PDF and standalone XML without changing labels or original
+messages. Local repeat-upload prevention passed for each format; a server duplicate
+check also passed for the plain PDF. A malformed XML was rejected (406); its
+corrected copy was accepted (202). Acceptance does not establish invoice validity
+or completed bookkeeping.
 Python 3.12+; Windows and Linux application checks run in CI. The separate protected
 developer launcher currently supports Linux only.
 
@@ -40,8 +42,8 @@ Use a dedicated label containing synthetic documents for the first experiment.
 Commands produce JSON; copy a candidate ID from `scan`, then a hash from `stage`:
 
 ```sh
-belegdock scan --label "Rechnung"
-belegdock stage --label "Rechnung" --select "MESSAGE_ID:PART_ID"
+belegdock scan --label "Rechnungen"
+belegdock stage --label "Rechnungen" --select "MESSAGE_ID:PART_ID"
 belegdock documents
 belegdock upload SHA256_HASH
 ```
@@ -55,11 +57,45 @@ Data defaults to the OS application-data directory (`BelegDock`), with
 `state.sqlite3` and `blobs/`. Override it before the command, for example
 `belegdock --data-dir /path/to/test-data documents`. Keep the entire directory for
 recovery; back it up while no command is running. No files are automatically deleted.
+After upgrading an existing state directory, run `documents` once before starting
+concurrent BelegDock commands. The local schema upgrade may refuse a concurrent
+first start and makes no remote request.
 
-A confirmed uploaded hash is not resent. `uploading` or `uncertain` means the
-remote outcome needs manual investigation in Lexware; the CLI blocks another
-attempt. A reconciliation command is not implemented yet. Do not reset the state
-or delete staging to force a retry.
+A confirmed uploaded hash is not resent. A documented Lexware rejection (HTTP
+400 or 406) is recorded as `rejected`; correct the document and stage its new
+bytes. `uploading` and `uncertain` block another upload.
+
+If a process ended during an upload, run `belegdock recover-upload SHA256_HASH`.
+It changes only a local `uploading` record whose per-document operating-system
+lock is no longer held to `uncertain`; it does not send a request or allow a retry.
+Inspect Lexware first. When you have the matching document, run:
+
+```sh
+belegdock reconcile SHA256_HASH --file-id FILE_ID --voucher-id VOUCHER_ID
+```
+
+This downloads the remote file and voucher, requires the voucher to reference
+the file, and records the IDs only when the downloaded bytes match the staged
+hash. A failed reconciliation leaves the document `uncertain`. Do not reset the
+state or delete staging to force a retry; retry after an uncertain upload remains
+deferred because this narrow flow cannot prove remote absence.
+
+For the user-run Windows package check, copy the current
+`dist/belegdock-0.1.0.dev0-py3-none-any.whl` to Windows, then use PowerShell:
+
+```powershell
+$wheel = "$env:USERPROFILE\Downloads\belegdock-0.1.0.dev0-py3-none-any.whl"
+$environment = "$env:LOCALAPPDATA\BelegDock-test-env"
+$data = "$env:LOCALAPPDATA\BelegDock-test-data"
+py -3.12 -m venv $environment
+& "$environment\Scripts\python.exe" -m pip install $wheel
+& "$environment\Scripts\python.exe" -m belegdock --help
+& "$environment\Scripts\belegdock.exe" --data-dir $data documents
+```
+
+Then follow the connection, selection, and recovery instructions above for an
+account test. Do not transfer credentials or local state through Git. This
+package check does not test Gmail or Lexware connectivity.
 
 ## Development
 
