@@ -60,8 +60,12 @@ def verify(repo):
         revision = subprocess.check_output(
             ["git", "rev-parse", checkpoint], cwd=repo, text=True).strip()
         test_path = "tests/app/" + filename
-        frozen = subprocess.check_output(
-            ["git", "cat-file", "blob", f"{revision}:{test_path}"], cwd=repo)
+        archived = subprocess.check_output(["git", "archive", revision, test_path], cwd=repo)
+        with tarfile.open(fileobj=io.BytesIO(archived)) as archive:
+            member = archive.extractfile(test_path)
+            if member is None:
+                raise ValueError(f"{name}: test differs from its approved checkpoint")
+            frozen = member.read()
         if frozen != (repo / test_path).read_bytes():
             raise ValueError(f"{name}: test differs from its approved checkpoint")
         expected_names, _ = identities(test_path, frozen)
