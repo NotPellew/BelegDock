@@ -12,7 +12,12 @@ messages. Local repeat-upload prevention passed for each format; a server duplic
 check also passed for the plain PDF. A malformed XML was rejected (406); its
 corrected copy was accepted (202). Acceptance does not establish invoice validity
 or completed bookkeeping. The same live flow passed on native Windows through the
-built package, using Windows Credential Manager for both accounts.
+built package, using Windows Credential Manager for both accounts. A live manual
+reconciliation of an interrupted upload also passed: the interrupted process left
+the document uncertain, and the document was recorded as uploaded only after the
+operator-supplied remote file and voucher verified the link and the downloaded
+bytes matched the staged hash. A mismatched remote file and a repeated
+reconciliation both failed without resending or changing the mailbox.
 Python 3.12+; Windows and Linux application checks run in CI. The separate protected
 developer launcher currently supports Linux only.
 

@@ -4,8 +4,10 @@ An early CLI and Linux developer boundary are implemented. Offline verification
 covers the transfer workflow. Live Gmail retrieval/staging and mailbox preservation
 passed on Linux and native Windows. Lexware accepted plain PDF, ZUGFeRD PDF and
 corrected standalone XML; local no-resend and plain-PDF server duplicate behavior
-passed. A malformed XML was rejected. Public release remains a separate gate. See
-README for current user commands.
+passed. A malformed XML was rejected. A live manual reconciliation of an
+interrupted upload matched an operator-supplied remote file and voucher to the
+staged bytes. Public release remains a separate gate. See README for current user
+commands.
 
 ## 1. Introduction and goals
 
@@ -165,7 +167,12 @@ and host sockets are not. The session gets a temporary home and /tmp.
   Credential Manager supplied both credentials across processes, and Gmail
   scan/staging and Lexware upload/rejection outcomes matched.
   Acceptance does not prove invoice conformance or completed bookkeeping.
-  Manual reconciliation remains unverified.
+  A live manual reconciliation of an interrupted upload passed: the interrupted
+  local process left the document uncertain, the operator-supplied remote file and
+  voucher were downloaded, the voucher was confirmed to reference the file, the
+  bytes matched the staged hash, and the IDs were recorded. A mismatched remote
+  file and a repeated reconciliation both failed and left the document uncertain;
+  Gmail and the remote records were unchanged.
 - Before public release, establish Gmail distribution requirements and Lexware
   API/key usage terms for this application, including whether users may generate
   and store their own key in a local open-source client that never receives it;
