@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   record:
     runs-on: ubuntu-latest
@@ -29,3 +33,4 @@ jobs:
           name: verification-${{ github.sha }}
           path: ${{ runner.temp }}/belegdock-evidence
           if-no-files-found: error
+          retention-days: 90

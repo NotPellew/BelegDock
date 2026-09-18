@@ -3,12 +3,38 @@ name: red-replay
 on:
   push:
   pull_request:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.event_name || 'ci' }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+
 jobs:
-  replay:
+  verify:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - run: uv sync --locked
+      - name: Verify frozen RED checkpoints
+        run: uv run python scripts/replay_red.py --repo . --verify
+
+  execute:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -23,7 +49,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
-      - name: Replay frozen initial feature failures
+      - name: Execute frozen RED replay
         run: uv run python scripts/replay_red.py --repo . --output "${{ runner.temp }}/belegdock-red"
       - name: Retain RED evidence
         if: always()
@@ -32,3 +58,4 @@ jobs:
           name: red-${{ matrix.os }}-${{ matrix.python }}
           path: ${{ runner.temp }}/belegdock-red
           if-no-files-found: error
+          retention-days: 90
