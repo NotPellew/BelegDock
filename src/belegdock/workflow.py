@@ -291,6 +291,7 @@ class Store:
 
     @staticmethod
     def _windows_lock(handle: Any, mode: str) -> None:
+        handle.seek(0)
         msvcrt = __import__("msvcrt")
         msvcrt.locking(handle.fileno(), getattr(msvcrt, mode), 1)
 

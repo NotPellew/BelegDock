@@ -8,7 +8,6 @@ from belegdock.workflow import Store
 
 def hold_upload_with_lock_contents(root, digest, entered, release):
     def uploader(data, filename):
-        (Path(root) / f".{digest}.upload.lock").write_bytes(b"held-state")
         entered.set()
         release.wait(10)
         return {"id": "file-1", "voucherId": "voucher-1"}
@@ -22,6 +21,8 @@ class UploadLockIntegrityTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         digest = Store(root).stage("account", "message", "part", "receipt.pdf", b"receipt")
+        lock_path = root / f".{digest}.upload.lock"
+        lock_path.write_bytes(b"held-state")
         entered, release = multiprocessing.Event(), multiprocessing.Event()
         worker = multiprocessing.Process(
             target=hold_upload_with_lock_contents, args=(root, digest, entered, release)
@@ -31,13 +32,13 @@ class UploadLockIntegrityTests(unittest.TestCase):
             self.assertTrue(entered.wait(10))
             with self.assertRaisesRegex(RuntimeError, "active|running"):
                 Store(root).recover_upload(digest)
-            self.assertEqual((root / f".{digest}.upload.lock").read_bytes(), b"held-state")
         finally:
             release.set()
             worker.join(10)
             if worker.is_alive():
                 worker.terminate()
                 worker.join(10)
+        self.assertEqual(lock_path.read_bytes(), b"held-state")
 
 
 if __name__ == "__main__":
