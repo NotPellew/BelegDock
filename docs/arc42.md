@@ -1,8 +1,8 @@
 # BelegDock architecture
 
-The application is not implemented yet. The Linux developer-session protection
-described below is implemented and locally verified; the full verifier and CI
-remain pending.
+An early CLI and Linux developer boundary are implemented. Offline verification
+covers the transfer workflow; live service feasibility and public release remain
+separate gates. See README for current user commands.
 
 ## 1. Introduction and goals
 
@@ -29,7 +29,8 @@ SQLite and document files live locally, outside the source repository.
 The first public release must support other users connecting their own accounts.
 Experiments use a test project/account and only the authentication needed to
 establish feasibility. Public onboarding/verification work follows the complete
-proof and precedes public release. Gmail API versus IMAP remains undecided.
+proof and precedes public release. The bounded experiment uses Gmail API with
+gmail.readonly and a Desktop OAuth test client.
 
 Defer GUI, AI, OCR, invoice-link crawling, multiple accounts/providers, plugins,
 full document management, and legal archive/compliance claims.
@@ -69,6 +70,7 @@ upload or ordinary file write; recovery across these boundaries needs tests.
 Start with an installable Python package. Standalone executables may follow.
 Verify installation and the built CLI on Windows and Linux. User data, credentials,
 and host-specific development permissions are separate from repository contents.
+The package targets Python 3.12+; CI checks Python 3.12/3.14 on Ubuntu and Windows.
 
 Developer isolation currently requires Linux and Bubblewrap; native Windows
 fails explicitly. This limitation does not change the application's platform
@@ -123,17 +125,22 @@ and host sockets are not. The session gets a temporary home and /tmp.
 
 ## 11. Risks and open work
 
-- Bootstrap package tooling, the full evidence verifier, and CI. Linux protection
-  passed 14 tests on the current host; verify each additional host separately.
-  Windows enforcement, persistent CLI authentication, and real agent-session
-  integration remain unverified. The existing desktop task is outside the
-  protected session. Symlink-based environments and linked worktrees are currently
-  unsupported; avoid concurrent host edits during validation and execution.
+- Package tooling, application CI and a local evidence recorder now exist. Linux
+  isolation passed 14 tests and a bounded authenticated Luna execution probe.
+  Native Windows isolation and persistent CLI authentication remain unverified.
+  Desktop tasks are outside that boundary. Symlink-based checkout environments
+  and linked worktrees are unsupported; avoid concurrent host edits.
+- The initial Gmail adapter refuses malformed parts, including empty part IDs.
+  Real account/provider edge cases remain to be established.
+- Interrupted uploads remain uploading/uncertain and cannot be resent. Manual
+  investigation is supported operationally; a reconciliation command is deferred.
+  Windows flushes file bytes, while POSIX also flushes the containing directory.
+  Power-loss durability and backup restoration need separate validation.
 - Prove Gmail reading, Lexware upload/recovery, and the combined workflow using
   test accounts before investing in public Gmail onboarding.
 - Before public release, establish Gmail distribution requirements and Lexware
   API/key usage terms for this application; select an open-source license.
-- Define exact platform/Python support, data locations, limits, cleanup policy,
+- Define exact supported OS versions, cleanup policy,
   and backup/restore behavior before making related user-facing promises.
 - Retain the original Project Guide temporarily. After checking migration and
   preserving its original content in Git history, delete it from the working

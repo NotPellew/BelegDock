@@ -1,39 +1,69 @@
 # BelegDock
 
-A planned local tool for selecting Gmail attachments and uploading them to
+A local CLI for explicitly selecting Gmail attachments and uploading them to
 Lexware Office without changing the mailbox.
 
 ## Status
 
-The project is in setup and feasibility testing. There is no installable
-application yet. Windows and Linux are the initial targets; support is not yet
-verified. The first public release should allow other users to connect their
-own accounts.
+Early feasibility build, not a production release. Offline tests cover selection,
+staging, duplicates and uncertain uploads. Live service verification is pending.
+Python 3.12+; Windows and Linux application checks run in CI. The separate protected
+developer launcher currently supports Linux only.
 
-## Intended use
+## Install and connect
 
-1. Connect one Gmail account using the operating system's credential store.
-2. Scan one selected label for PDF/XML attachment candidates.
-3. Explicitly select documents for upload to Lexware Office.
-4. Inspect the result and resolve any uncertain upload before retrying.
+From this checkout, install with `uv tool install .`, then run `belegdock --help`.
+Keep account setup files and document data outside the repository.
 
-Commands run once; scheduling comes later. A candidate is not necessarily an
-invoice. Reliable staging and upload come first, with optional retention of
-original attachments afterward. No automatic deletion policy is agreed yet.
+1. Create a Google Cloud test project, enable Gmail API, and configure OAuth as
+   External / Testing with your Gmail account listed as a test user. Create a
+   Desktop app client and download its JSON outside this checkout.
+2. Run `belegdock login-gmail --client /path/to/client.json` and approve the
+   browser request. The only requested Gmail scope is `gmail.readonly`.
+3. Create a [Lexware trial account](https://app.lexware.de/signup/app/trial) and
+   generate a key in its [Public API settings](https://app.lexware.de/addons/public-api).
+   Run `belegdock login-lexware` and enter it at the hidden prompt. Saving a key
+   does not verify that Lexware accepts it.
 
-Installation, authentication, data locations, and recovery instructions will be
-added as those behaviors become available. Do not use real documents as test
-fixtures or put credentials in this repository.
+Credentials use Windows Credential Manager or Linux Secret Service. An unavailable
+store is an error; there is no plaintext fallback. Google OAuth client JSON is
+setup material; refresh/access tokens are stored only in the OS credential store.
+See [Google's setup guide](https://developers.google.com/workspace/gmail/api/quickstart/python)
+and [Lexware's API guide](https://developers.lexware.io/cookbooks/public-api/).
+
+## Select and transfer
+
+Use a dedicated label containing synthetic documents for the first experiment.
+Commands produce JSON; copy a candidate ID from `scan`, then a hash from `stage`:
+
+```sh
+belegdock scan --label "Rechnung"
+belegdock stage --label "Rechnung" --select "MESSAGE_ID:PART_ID"
+belegdock documents
+belegdock upload SHA256_HASH
+```
+
+Repeat `--select` for more attachments. Scanning does not upload; Gmail message responses may include inline attachment
+bytes, but only explicitly selected attachments are staged. PDF/XML filenames identify candidates, not
+verified invoices. The conservative size limit is 5,000,000 bytes per attachment.
+Duplicate bytes share a blob while each source occurrence is retained.
+
+Data defaults to the OS application-data directory (`BelegDock`), with
+`state.sqlite3` and `blobs/`. Override it before the command, for example
+`belegdock --data-dir /path/to/test-data documents`. Keep the entire directory for
+recovery; back it up while no command is running. No files are automatically deleted.
+
+A confirmed uploaded hash is not resent. `uploading` or `uncertain` means the
+remote outcome needs manual investigation in Lexware; the CLI blocks another
+attempt. A reconciliation command is not implemented yet. Do not reset the state
+or delete staging to force a retry.
 
 ## Development
 
-- [AGENTS.md](AGENTS.md): contribution workflow, test protection, and checks.
-- [Architecture](docs/arc42.md): scope, decisions, quality requirements, and risks.
-- Use the [GitHub feature-request form](https://github.com/NotPellew/BelegDock/issues/new?template=feature.yml)
-  to propose work. Refine the issue before implementation and link its pull request.
+- [AGENTS.md](AGENTS.md): workflow, immutable tests, development commands and isolation.
+- [Architecture](docs/arc42.md): scope, decisions, limits and remaining work.
+- [Feature form](https://github.com/NotPellew/BelegDock/issues/new?template=feature.yml):
+  refine work in an issue; keep delivery evidence in its PR.
 
-A Linux-only developer launcher now protects established tests in a separate CLI
-session. It has no Python package dependencies; see AGENTS.md for requirements,
-commands, and limits. Native Windows protection and CI are still pending.
-
+Public Gmail onboarding, scheduling, GUI and document archiving remain deferred.
 An open-source license must be selected before public distribution.

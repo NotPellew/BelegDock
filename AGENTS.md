@@ -91,20 +91,56 @@ unprotected execution. The standard-library suite uses disposable checkouts.
 - For an approved test change, exit the protected session, apply only the exact
   approved diff from the trusted host, reestablish RED evidence, then relaunch.
   Do not weaken the running session's protection. Avoid concurrent host edits.
-- Codex --help starts inside the boundary without a model call. A real agent
-  session, its authentication, and nested sandbox compatibility are not verified.
-  The launcher does not constrain other desktop tasks or host processes.
+- A bounded authenticated Luna probe executed a source write and was denied a
+  protected-file write. Codex workspace-write fails inside the boundary because
+  nested namespaces are blocked. Use Codex danger-full-access only inside this
+  outer Bubblewrap boundary; the outer restrictions remain active. A temporary
+  native login may be established inside the session with device authorization.
+  This launcher does not constrain other desktop tasks or host processes.
 
 Issue #1 verified 14 Linux tests after observed RED failures, including a review
 regression for a protected symlink targeting writable source. Test source remained
 unchanged after creation. Native Windows enforcement remains pending.
 
-The full evidence verifier and CI remain pending: record revisions, input hashes,
-commands, test identifiers, environment, and results; reject missing/skipped tests
-and unapproved input changes; replay RED and run GREEN on both target platforms.
-Keep detailed reports outside the protected checkout and concise evidence in PRs.
-The package environment is not bootstrapped. uv, pytest, Ruff, and a type checker
-remain the proposed application toolset; no product build command exists yet.
+Development uses uv with an environment outside the checkout. For Linux:
+
+```sh
+export UV_PROJECT_ENVIRONMENT=/tmp/belegdock-dev
+uv sync --locked
+uv run pytest tests/app -q
+uv run ruff check src
+uv run mypy src
+uv run python -m unittest discover -s tests/evidence -v
+uv build --wheel
+```
+
+On Windows, set UV_PROJECT_ENVIRONMENT to an external directory in PowerShell
+using `$env:UV_PROJECT_ENVIRONMENT`. Application CI uses Python 3.12 and 3.14 on
+Ubuntu and Windows. The original Bubblewrap suite remains a separate Linux host
+check, not a skipped Windows application test. The evidence fake-runner tests
+currently require Linux; the real-runner tests use pytest.
+
+`scripts/test_evidence.py` records snapshots and RED/GREEN reports outside the
+checkout. Use the same Python interpreter with pytest installed for both phases:
+
+```sh
+python scripts/test_evidence.py snapshot --repo . --output /outside/snapshot.json
+python scripts/test_evidence.py run --repo . --snapshot /outside/snapshot.json --output /outside/red --phase red --expected-failure 'tests/app/test_feature.py::test_behavior'
+python scripts/test_evidence.py run --repo . --snapshot /outside/snapshot.json --output /outside/green --phase green
+```
+
+Supply every expected failing ID separately. The recorder rejects changed inputs,
+missing/skipped tests, collection errors and unexpected failures. Each run needs a
+new output directory. Inspect RED reasons: a matching failure alone does not prove
+the right behavior is tested. Reports are local evidence, not tamper-proof audit
+records; CI and user review remain separate checks. Snapshot after approved test
+changes and before implementation. Preserve the earlier snapshot and logs.
+
+Do not run these commands concurrently with source/configuration edits. The
+protected shell can create a disposable virtual environment inside its /tmp;
+external host environments are not mounted. Native Windows developer isolation
+is still pending. Gmail browser authorization and OS credential storage run from
+the ordinary user terminal, outside the credential-free developer boundary.
 
 ## Implementation and documentation
 
