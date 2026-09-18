@@ -31,7 +31,7 @@ class EvidenceRecorderTests(unittest.TestCase):
             "if '--collect-only' in args:\n"
             "    print('tests/app/test_invoice.py::test_invoice')\n"
             "    raise SystemExit(0)\n"
-            "xml = pathlib.Path(next(a[12:] for a in args if a.startswith('--junitxml=')))\n"
+            "xml = pathlib.Path(next(a.split('=', 1)[1] for a in args if a.startswith('--junitxml=')))\n"
             "xml.parent.mkdir(parents=True, exist_ok=True)\n"
             "xml.write_text('<testsuite tests=\"1\" failures=\"1\" errors=\"0\" skipped=\"0\">'"
             " + '<testcase classname=\"tests.app.test_invoice\" name=\"test_invoice\">'"

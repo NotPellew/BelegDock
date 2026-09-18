@@ -76,7 +76,14 @@ class FakeGmailService:
         return self
 
     def labels(self):
-        return self
+        owner = self
+
+        class Labels:
+            def list(self, **kwargs):
+                owner.label_calls.append(kwargs)
+                return request({"labels": [{"id": "LBL", "name": "Invoices"}]})
+
+        return Labels()
 
     def messages(self):
         return self
