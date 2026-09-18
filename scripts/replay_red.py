@@ -61,7 +61,7 @@ def verify(repo):
             ["git", "rev-parse", checkpoint], cwd=repo, text=True).strip()
         test_path = "tests/app/" + filename
         frozen = subprocess.check_output(
-            ["git", "show", f"{revision}:{test_path}"], cwd=repo)
+            ["git", "cat-file", "blob", f"{revision}:{test_path}"], cwd=repo)
         if frozen != (repo / test_path).read_bytes():
             raise ValueError(f"{name}: test differs from its approved checkpoint")
         expected_names, _ = identities(test_path, frozen)
