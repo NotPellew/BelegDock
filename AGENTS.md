@@ -136,6 +136,8 @@ the right behavior is tested. CI also runs the recorder and retains its snapshot
 Reports are execution evidence, not tamper-proof audit records or independent
 proof of chronology; user review remains a separate check. Snapshot after approved test
 changes and before implementation. Preserve the earlier snapshot and logs.
+Automatic replay of historical RED snapshots in CI remains pending; current CI
+records GREEN, while checkpoint commits and local logs retain the observed RED.
 
 Do not run these commands concurrently with source/configuration edits. The
 protected shell can create a disposable virtual environment inside its /tmp;
