@@ -60,28 +60,51 @@ Documentation-only changes use document validation rather than behavioral tests.
 
 ## Verification design and current limits
 
-No verification script, CI workflow, or enforced test protection exists yet.
-These are accepted requirements to implement and validate, not current guarantees.
+The Linux launcher scripts/protected_run.py enforces read-only repository access
+except src/, docs/, and an existing README.md. Tests, configuration, scripts, Git
+metadata, and agent instructions remain read-only. Missing isolation support and
+native Windows fail closed. This desktop task is not retroactively protected.
 
-- During implementation, tests, fixtures, snapshots, helpers, verification
-  configuration/script, and the verification dependency lockfile are read-only.
-  Enforcement must be outside the implementing agent's ability to change.
-- A small verifier records issue, source/test revisions, protected-input hashes,
-  command, expected test identifiers, environment, timestamp/order, and results.
-- GREEN requires the expected tests to run and pass with the recorded inputs;
-  missing/skipped tests or unapproved input changes cannot satisfy the gate.
-- CI replays the intended failures against the pre-implementation code and checks
-  the implementation plus the full suite on Windows and Linux. RED replay
-  supplements the original execution record; it does not prove chronology alone.
-- Keep detailed output in execution/CI artifacts and concise evidence in the PR.
-  A trusted runner must produce evidence; do not accept self-authored results as
-  proof. Keep artifact collection outside application code's control.
-- Verify that unauthorized edits are blocked and altered/missing/skipped tests
-  are rejected before claiming the protection works on a development host.
+From a normal host terminal in the checkout:
 
-The package environment is not bootstrapped; no build, lint, or test command is
-currently available. The proposed toolset is uv, pytest, Ruff, and one type checker.
-Document exact working commands here when that setup is implemented.
+```sh
+python3 -m unittest discover -s tests -v
+python3 scripts/protected_run.py -- bash --noprofile --norc
+```
+
+Requirements: Linux, Python 3, and Bubblewrap with user namespaces and
+--disable-userns support. A surrounding sandbox may prevent nested namespaces;
+run the checks from the host terminal. A refused launch never falls back to
+unprotected execution. The standard-library suite uses disposable checkouts.
+
+- Inside the session the checkout is /workspace. Only edits to the writable
+  areas persist. HOME and /tmp are isolated and discarded on exit; host account
+  credentials, CLI profiles, and host sockets are not inherited.
+- Networking is off. --network explicitly enables host networking, including
+  host TCP services; enable it only for trusted CLI use. Do not connect tools
+  that can perform host-side edits outside this boundary.
+- Only system-installed runtimes are exposed. Checkout symlinks, special files,
+  and writable hardlinks are refused. Symlink-based virtual environments and
+  linked Git worktrees are not supported by this first launcher.
+- Source and documentation directories are created if absent. Do not store test
+  definitions, fixtures, or verification configuration in these writable areas.
+- For an approved test change, exit the protected session, apply only the exact
+  approved diff from the trusted host, reestablish RED evidence, then relaunch.
+  Do not weaken the running session's protection. Avoid concurrent host edits.
+- Codex --help starts inside the boundary without a model call. A real agent
+  session, its authentication, and nested sandbox compatibility are not verified.
+  The launcher does not constrain other desktop tasks or host processes.
+
+Issue #1 verified 14 Linux tests after observed RED failures, including a review
+regression for a protected symlink targeting writable source. Test source remained
+unchanged after creation. Native Windows enforcement remains pending.
+
+The full evidence verifier and CI remain pending: record revisions, input hashes,
+commands, test identifiers, environment, and results; reject missing/skipped tests
+and unapproved input changes; replay RED and run GREEN on both target platforms.
+Keep detailed reports outside the protected checkout and concise evidence in PRs.
+The package environment is not bootstrapped. uv, pytest, Ruff, and a type checker
+remain the proposed application toolset; no product build command exists yet.
 
 ## Implementation and documentation
 
