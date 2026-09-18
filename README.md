@@ -6,7 +6,9 @@ Lexware Office without changing the mailbox.
 ## Status
 
 Early feasibility build, not a production release. Offline tests cover selection,
-staging, duplicates and uncertain uploads. Live service verification is pending.
+staging, duplicates and uncertain uploads. A live Gmail test staged two synthetic
+PDFs without changing labels or original messages. Live XML and Lexware upload
+verification remain pending.
 Python 3.12+; Windows and Linux application checks run in CI. The separate protected
 developer launcher currently supports Linux only.
 

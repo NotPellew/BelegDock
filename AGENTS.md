@@ -132,8 +132,9 @@ python scripts/test_evidence.py run --repo . --snapshot /outside/snapshot.json -
 Supply every expected failing ID separately. The recorder rejects changed inputs,
 missing/skipped tests, collection errors and unexpected failures. Each run needs a
 new output directory. Inspect RED reasons: a matching failure alone does not prove
-the right behavior is tested. Reports are local evidence, not tamper-proof audit
-records; CI and user review remain separate checks. Snapshot after approved test
+the right behavior is tested. CI also runs the recorder and retains its snapshot/JUnit/report artifacts.
+Reports are execution evidence, not tamper-proof audit records or independent
+proof of chronology; user review remains a separate check. Snapshot after approved test
 changes and before implementation. Preserve the earlier snapshot and logs.
 
 Do not run these commands concurrently with source/configuration edits. The
