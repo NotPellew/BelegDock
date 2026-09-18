@@ -1,0 +1,47 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  application:
+    name: ${{ matrix.os }} Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install development tools
+        run: uv sync --locked
+      - name: Run application tests
+        run: uv run pytest tests/app -q
+      - name: Check source with Ruff
+        run: uv run ruff check src
+      - name: Check source with mypy
+        run: uv run mypy src
+      - name: Build wheel
+        run: uv build --wheel
+      - name: Install and smoke test wheel outside checkout
+        shell: bash
+        run: >-
+          uv run --no-sync python -c "import glob, pathlib, shutil, subprocess, sys, tempfile;
+          wheel=str(pathlib.Path(glob.glob('dist/*.whl')[0]).resolve());
+          directory=tempfile.mkdtemp(prefix='belegdock-wheel-smoke-');
+          subprocess.run([shutil.which('uv'), 'pip', 'install', '--python', sys.executable, '--no-deps', '--reinstall', '--no-index', '--find-links', str(pathlib.Path(wheel).parent), wheel], cwd=directory, check=True);
+          result=subprocess.run([sys.executable, '-m', 'belegdock', '--help'], cwd=directory, text=True, capture_output=True, check=True);
+          assert 'early-stage' in result.stdout"

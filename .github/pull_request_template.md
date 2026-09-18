@@ -9,7 +9,8 @@ Describe the user-visible change and any remaining limitations.
 | Check | Evidence |
 | --- | --- |
 | Passing baseline | Revision, command, result |
-| RED before implementation | Test snapshot, command, intended failures, artifact |
+| RED before implementation | `scripts/test_evidence.py run --phase red` snapshot, command, intended failures, local artifact path |
+| CI RED replay | `red-replay` `--verify` on the PR (test files match checkpoints). Full execute and `red-<os>-<py>` artifacts are nightly / `workflow_dispatch`, not attached to the PR |
 | GREEN | Implementation revision, same tests, result, artifact |
 | Protected inputs | Unchanged, or link to prior approval of the exact change |
 | Windows / Linux | CI runs, built-package checks, anything not run |
