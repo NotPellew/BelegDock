@@ -4,9 +4,6 @@
 
 - Follow the user's explicit scope and authorization. Preserve unrelated work.
 - Read README.md for product status and docs/arc42.md for accepted decisions.
-- PROJECT_GUIDE.md is a superseded brief retained temporarily. Do not use it as
-  implementation guidance. Delete it after migration is checked and its original
-  content is preserved in Git history.
 - Keep machine-specific paths, launchers, and sandbox configuration outside this
   repository. Windows and Linux must both be verified.
 - Inspect current files and Git state before changing them. A read-only request

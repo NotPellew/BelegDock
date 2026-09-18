@@ -167,12 +167,11 @@ and host sockets are not. The session gets a temporary home and /tmp.
   Acceptance does not prove invoice conformance or completed bookkeeping.
   Manual reconciliation remains unverified.
 - Before public release, establish Gmail distribution requirements and Lexware
-  API/key usage terms for this application; select an open-source license.
+  API/key usage terms for this application, including whether users may generate
+  and store their own key in a local open-source client that never receives it;
+  select an open-source license.
 - Define exact supported OS versions, cleanup policy,
   and backup/restore behavior before making related user-facing promises.
-- Retain the original Project Guide temporarily. After checking migration and
-  preserving its original content in Git history, delete it from the working
-  tree so agents do not treat it as a competing specification.
 
 ## 12. Glossary
 
