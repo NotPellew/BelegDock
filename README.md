@@ -11,7 +11,8 @@ plain PDF, ZUGFeRD PDF and standalone XML without changing labels or original
 messages. Local repeat-upload prevention passed for each format; a server duplicate
 check also passed for the plain PDF. A malformed XML was rejected (406); its
 corrected copy was accepted (202). Acceptance does not establish invoice validity
-or completed bookkeeping.
+or completed bookkeeping. The same live flow passed on native Windows through the
+built package, using Windows Credential Manager for both accounts.
 Python 3.12+; Windows and Linux application checks run in CI. The separate protected
 developer launcher currently supports Linux only.
 
@@ -94,8 +95,10 @@ py -3.12 -m venv $environment
 ```
 
 Then follow the connection, selection, and recovery instructions above for an
-account test. Do not transfer credentials or local state through Git. This
-package check does not test Gmail or Lexware connectivity.
+account test. Do not transfer credentials or local state through Git. The package
+check above does not itself test Gmail or Lexware connectivity; a separate user-run
+Windows test of the installed package passed with Windows Credential Manager, live
+Gmail scan/staging, and Lexware upload and rejection handling.
 
 ## Development
 

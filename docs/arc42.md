@@ -2,10 +2,10 @@
 
 An early CLI and Linux developer boundary are implemented. Offline verification
 covers the transfer workflow. Live Gmail retrieval/staging and mailbox preservation
-passed. Lexware accepted plain PDF, ZUGFeRD PDF and corrected standalone XML;
-local no-resend and plain-PDF server duplicate behavior passed. A malformed XML
-was rejected. Public release remains a separate gate. See README for current
-user commands.
+passed on Linux and native Windows. Lexware accepted plain PDF, ZUGFeRD PDF and
+corrected standalone XML; local no-resend and plain-PDF server duplicate behavior
+passed. A malformed XML was rejected. Public release remains a separate gate. See
+README for current user commands.
 
 ## 1. Introduction and goals
 
@@ -132,7 +132,8 @@ and host sockets are not. The session gets a temporary home and /tmp.
 
 - Package tooling, application CI and a local evidence recorder now exist. Linux
   isolation passed 14 tests and a bounded authenticated Luna execution probe.
-  Native Windows isolation and persistent CLI authentication remain unverified.
+  Native Windows developer isolation remains unverified; persistent CLI
+  authentication and the live flow passed on native Windows.
   Desktop tasks are outside that boundary. Symlink-based checkout environments
   and linked worktrees are unsupported; avoid concurrent host edits.
 - The initial Gmail adapter refuses malformed parts, including empty part IDs.
@@ -159,7 +160,10 @@ and host sockets are not. The session gets a temporary home and /tmp.
   The standalone XML failed local syntax parsing and Lexware rejected it (406).
   Its corrected copy was accepted (202) through the renamed Rechnungen label;
   repeating the local upload made no request. All selected attachments retained
-  their original bytes; Gmail remained unchanged.
+  their original bytes; Gmail remained unchanged. The same flow was repeated on
+  native Windows through the built package: the CLI installed and ran, Windows
+  Credential Manager supplied both credentials across processes, and Gmail
+  scan/staging and Lexware upload/rejection outcomes matched.
   Acceptance does not prove invoice conformance or completed bookkeeping.
   Manual reconciliation remains unverified.
 - Before public release, establish Gmail distribution requirements and Lexware
