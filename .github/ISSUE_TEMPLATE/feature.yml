@@ -1,0 +1,38 @@
+name: Feature request
+description: Describe a user need, then refine it into a small testable feature.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is difficult or missing, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should the user be able to do?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and exclusions
+      description: What belongs in this feature, and what is deferred?
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable outcomes, including relevant failures. Complete during refinement.
+    validations:
+      required: false
+  - type: textarea
+    id: questions
+    attributes:
+      label: Open questions
+      description: Record decisions needed before implementation, or write None.
+    validations:
+      required: false
