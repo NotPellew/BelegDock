@@ -1,12 +1,13 @@
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "test_evidence.py"
-PYTHON = "/tmp/belegdock-dev/bin/python"
+PYTHON = sys.executable
 
 
 class RealEvidenceRegressionTests(unittest.TestCase):

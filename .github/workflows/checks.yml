@@ -33,7 +33,7 @@ jobs:
       - name: Install and smoke test wheel outside checkout
         shell: bash
         run: >-
-          python -c "import glob, pathlib, shutil, subprocess, sys, tempfile;
+          uv run --no-sync python -c "import glob, pathlib, shutil, subprocess, sys, tempfile;
           wheel=str(pathlib.Path(glob.glob('dist/*.whl')[0]).resolve());
           directory=tempfile.mkdtemp(prefix='belegdock-wheel-smoke-');
           subprocess.run([shutil.which('uv'), 'pip', 'install', '--python', sys.executable, '--no-deps', '--reinstall', '--no-index', '--find-links', str(pathlib.Path(wheel).parent), wheel], cwd=directory, check=True);
