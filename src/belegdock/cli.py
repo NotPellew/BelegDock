@@ -1,7 +1,13 @@
 import argparse
 from collections.abc import Sequence
+from importlib import import_module
 
 from . import __version__
+from . import accounts
+
+
+def connect_gmail(client_path):
+    return ""
 
 
 def gmail_client():
