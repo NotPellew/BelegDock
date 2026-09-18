@@ -264,7 +264,7 @@ class Store:
         with path.open("a+b") as handle:
             acquired = False
             try:
-                if os.name == "nt":
+                if sys.platform == "win32":
                     self._windows_lock(handle, "LK_NBLCK")
                 else:
                     import fcntl
@@ -277,7 +277,7 @@ class Store:
                 yield acquired
             finally:
                 if acquired:
-                    if os.name == "nt":
+                    if sys.platform == "win32":
                         self._windows_lock(handle, "LK_UNLCK")
                     else:
                         import fcntl
