@@ -136,8 +136,12 @@ the right behavior is tested. CI also runs the recorder and retains its snapshot
 Reports are execution evidence, not tamper-proof audit records or independent
 proof of chronology; user review remains a separate check. Snapshot after approved test
 changes and before implementation. Preserve the earlier snapshot and logs.
-Automatic replay of historical RED snapshots in CI remains pending; current CI
-records GREEN, while checkpoint commits and local logs retain the observed RED.
+CI replays 34 initial feature tests from six frozen RED checkpoints on both
+platforms using scripts/replay_red.py; current application tests must pass GREEN.
+The replay validates historical snapshots, not chronology by itself. Review
+regression RED remains in local logs. Preserve checkpoint commits when merging;
+if approved tests change, establish replacement RED evidence before updating
+replay references. Never weaken a test to keep an old replay passing.
 
 Do not run these commands concurrently with source/configuration edits. The
 protected shell can create a disposable virtual environment inside its /tmp;

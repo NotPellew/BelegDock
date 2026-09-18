@@ -2,7 +2,8 @@
 
 An early CLI and Linux developer boundary are implemented. Offline verification
 covers the transfer workflow. Live Gmail PDF retrieval/staging and mailbox
-preservation passed; Lexware feasibility and public release remain separate gates. See README for current user commands.
+preservation passed. Lexware accepted one selected PDF; local no-resend and
+server duplicate behavior passed. Public release remains a separate gate. See README for current user commands.
 
 ## 1. Introduction and goals
 
@@ -139,8 +140,9 @@ and host sockets are not. The session gets a temporary home and /tmp.
 - Live Gmail PDF reading/staging and repeated-run deduplication passed with two
   synthetic messages. Labels and original message bytes remained unchanged.
   Attachment IDs varied between reads; use message/part IDs for occurrences.
-  Prove live XML, Lexware upload/recovery and the combined workflow before
-  investing in public Gmail onboarding.
+  The selected PDF reached Lexware (202); repeating locally made no new request,
+  and a deliberate server repeat returned identical file/voucher IDs. Live XML
+  and manual reconciliation after an uncertain outcome remain unverified.
 - Before public release, establish Gmail distribution requirements and Lexware
   API/key usage terms for this application; select an open-source license.
 - Define exact supported OS versions, cleanup policy,

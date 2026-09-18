@@ -1,0 +1,34 @@
+name: red-replay
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked
+      - name: Replay frozen initial feature failures
+        run: uv run python scripts/replay_red.py --repo . --output "${{ runner.temp }}/belegdock-red"
+      - name: Retain RED evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: red-${{ matrix.os }}-${{ matrix.python }}
+          path: ${{ runner.temp }}/belegdock-red
+          if-no-files-found: error
