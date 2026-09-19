@@ -113,4 +113,4 @@ Gmail scan/staging, and Lexware upload and rejection handling.
   refine work in an issue; keep delivery evidence in its PR.
 
 Public Gmail onboarding, scheduling, GUI and document archiving remain deferred.
-An open-source license must be selected before public distribution.
+Licensed under the Apache License, Version 2.0; see [LICENSE](LICENSE).
