@@ -37,8 +37,11 @@ establish feasibility. Public onboarding/verification work follows the complete
 proof and precedes public release. The bounded experiment uses Gmail API with
 gmail.readonly and a Desktop OAuth test client.
 
-Defer GUI, AI, OCR, invoice-link crawling, multiple accounts/providers, plugins,
-full document management, and legal archive/compliance claims.
+The desktop UI is a thin local tkinter/ttk view over the existing workflow. It
+supports label selection, explicit staging, and one-document upload confirmation;
+it does not poll, auto-retry, or reconcile uncertain uploads. AI, OCR, invoice-link
+crawling, multiple accounts/providers, plugins, full document management, and
+legal archive/compliance claims remain deferred.
 
 ## 4. Solution strategy
 
@@ -55,6 +58,7 @@ do not implement protocols manually. Add dependencies when needed.
 | Gmail integration | Read mail without changing it |
 | Local persistence | Processing state, document bytes, source occurrences |
 | Lexware integration | Upload and record/reconcile results |
+| Desktop UI | Present local choices and state; delegate workflow decisions |
 
 These are module responsibilities, not separate services or a plugin system.
 
@@ -115,7 +119,7 @@ and host sockets are not. The session gets a temporary home and /tmp.
 
 | Decision | Reason and consequence | Revisit trigger |
 | --- | --- | --- |
-| Python for the full proof | Small CLI experiments; no final GUI commitment | Complete workflow proven and a concrete limitation found |
+| Python for the full proof | Small CLI and tkinter experiments | Complete workflow proven and a concrete limitation found |
 | One package/process | Simple operation and testing | A demonstrated need for separate deployment |
 | SQLite state plus files | Local transactions without a server; files remain accessible | Shared concurrent access or recovery evidence warrants change |
 | Hash-based deduplication | Deterministic; changed bytes remain distinct | Proven need for invoice-level matching |

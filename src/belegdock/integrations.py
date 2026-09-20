@@ -27,6 +27,10 @@ class GmailAdapter:
     def __init__(self, service: Any):
         self.service = service
 
+    def labels(self) -> list[str]:
+        labels = self.service.users().labels().list(userId="me").execute().get("labels", [])
+        return [item["name"] for item in labels if isinstance(item, Mapping) and isinstance(item.get("name"), str)]
+
     def candidates(self, label_name: str) -> list[dict[str, Any]]:
         labels = self.service.users().labels().list(userId="me").execute().get("labels", [])
         label_id = next((item.get("id") for item in labels if item.get("name") == label_name), None)
