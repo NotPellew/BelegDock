@@ -159,6 +159,11 @@ and host sockets are not. The session gets a temporary home and /tmp.
   absence search and retry after uncertainty remain deferred.
   The first start against an older state database must run alone to apply its local
   schema upgrade; a concurrent first start fails before any remote request.
+  A missing or empty database in a nonempty data directory is treated as an
+  incomplete restore and is not recreated. Local document listing checks bounded
+  blob bytes and reports missing, corrupt, or unreadable blobs without changing
+  transfer status or remote identifiers. An already uploaded document is not
+  reported as successfully reusable when its local blob fails that check.
   Windows flushes file bytes, while POSIX also flushes the containing directory.
   Power-loss durability and backup restoration need separate validation.
 - Live Gmail PDF reading/staging and repeated-run deduplication passed with two

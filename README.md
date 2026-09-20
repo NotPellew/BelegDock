@@ -76,6 +76,12 @@ After upgrading an existing state directory, run `documents` once before startin
 concurrent BelegDock commands. The local schema upgrade may refuse a concurrent
 first start and makes no remote request.
 
+BelegDock initializes a missing or empty data directory. If a directory already
+contains staging artifacts but `state.sqlite3` is missing or empty, it refuses to
+initialize it so a partial restore cannot hide local state. `documents` checks each
+stored blob and reports `localIntegrity` as `ok`, `missing`, `corrupt`, or
+`unreadable`; a damaged result returns a failure status with restore guidance.
+
 A confirmed uploaded hash is not resent. A documented Lexware rejection (HTTP
 400 or 406) is recorded as `rejected`; correct the document and stage its new
 bytes. `uploading` and `uncertain` block another upload.

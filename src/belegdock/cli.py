@@ -9,7 +9,7 @@ from typing import Any
 
 from . import __version__, accounts
 from .integrations import GmailAdapter, LexwareAdapter
-from .workflow import DocumentRejected, Store
+from .workflow import DocumentRejected, LocalIntegrityError, Store
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
@@ -168,10 +168,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         result = dispatch(args)
         print(json.dumps(result, ensure_ascii=True))
+        if args.command == "documents" and any(
+            item.get("localIntegrity") != "ok" for item in result
+        ):
+            print(
+                "Local document integrity failed; restore state.sqlite3 and blobs from a consistent backup.",
+                file=sys.stderr,
+            )
+            return 1
         return 0
     except DocumentRejected as error:
         print(
             f"Upload rejected by Lexware (HTTP {error.status_code}); correct the document and stage new bytes.",
+            file=sys.stderr,
+        )
+        return 1
+    except LocalIntegrityError:
+        print(
+            "Local data is unavailable; restore state.sqlite3 and blobs from a consistent backup.",
             file=sys.stderr,
         )
         return 1
