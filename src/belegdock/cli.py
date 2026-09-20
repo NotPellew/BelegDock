@@ -9,6 +9,8 @@ from typing import Any
 
 from . import __version__, accounts
 from .integrations import GmailAdapter, LexwareAdapter
+from .desktop import DesktopUnavailableError, run_desktop
+from .service import refresh_remote_inventory as _refresh_remote_inventory
 from .workflow import DocumentRejected, LocalIntegrityError, Store
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -53,6 +55,10 @@ def lexware_client() -> LexwareAdapter:
     return LexwareAdapter(client)
 
 
+def default_data_dir() -> Path:
+    return Path(import_module("platformdirs").user_data_dir("BelegDock", appauthor=False))
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="belegdock",
@@ -70,6 +76,7 @@ def make_parser() -> argparse.ArgumentParser:
         if name == "stage":
             command.add_argument("--select", action="append", required=True, help="Candidate ID from scan; repeat to select more")
     commands.add_parser("documents", help="List local documents and transfer states")
+    commands.add_parser("desktop", help="Open the local desktop transfer interface")
     commands.add_parser("refresh", help="Refresh the local Lexware file inventory")
     upload = commands.add_parser("upload", help="Explicitly upload one staged hash")
     upload.add_argument("hash")
@@ -83,6 +90,8 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 def dispatch(args: argparse.Namespace) -> Any:
+    if args.command == "desktop":
+        return run_desktop(args.data_dir)
     if args.command == "login-gmail":
         return {"account": connect_gmail(args.client)}
     if args.command == "login-lexware":
@@ -97,7 +106,7 @@ def dispatch(args: argparse.Namespace) -> Any:
         selected = set(args.select)
         if selected - {item["id"] for item in candidates}:
             raise ValueError("Unknown selection; scan the label again.")
-    data_dir = args.data_dir or Path(import_module("platformdirs").user_data_dir("BelegDock", appauthor=False))
+    data_dir = args.data_dir or default_data_dir()
     store = Store(data_dir)
     if args.command == "documents":
         return store.list_documents()
@@ -141,19 +150,7 @@ def dispatch(args: argparse.Namespace) -> Any:
 
 
 def refresh_remote_inventory(store: Store, remote: LexwareAdapter) -> dict[str, Any]:
-    try:
-        inventory = remote.inventory(include_archived=True, expected_organization_id=store.remote_organization())
-        files = []
-        for item in inventory["files"]:
-            enriched = dict(item)
-            cached = store.cached_remote_hash(inventory["organizationId"], item)
-            enriched["hash"] = cached if cached is not None else remote.hash_file(item["id"])
-            files.append(enriched)
-        store.refresh_remote(inventory["organizationId"], files)
-        return {"organizationId": inventory["organizationId"], "count": len(files)}
-    except Exception:
-        store.record_refresh_failure("remote_refresh_failed")
-        raise
+    return _refresh_remote_inventory(store, remote)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -167,7 +164,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     try:
         result = dispatch(args)
-        print(json.dumps(result, ensure_ascii=True))
+        if args.command != "desktop":
+            print(json.dumps(result, ensure_ascii=True))
         if args.command == "documents" and any(
             item.get("localIntegrity") != "ok" for item in result
         ):
@@ -189,6 +187,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
+    except DesktopUnavailableError:
+        print(
+            "Desktop UI is unavailable; install Python Tk support and run 'belegdock desktop' again.",
+            file=sys.stderr,
+        )
+        return 1
     except Exception:
         if args.command == "stage":
             message = "Staging failed; check selection, connection, file size, and local storage."
@@ -200,6 +204,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             message = "Reconciliation failed; the document remains uncertain. Do not retry the upload."
         elif args.command.startswith("login"):
             message = "Connection failed; check the native credential store and account/client setup."
+        elif args.command == "desktop":
+            message = "Desktop operation failed; check Python Tk support and account setup."
         else:
             message = "Operation failed; check account connection, label, and local storage."
         print(message, file=sys.stderr)
