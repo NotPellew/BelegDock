@@ -23,6 +23,7 @@ GROUPS = (
     ("login", "afc60ac", "test_login.py", 3, {"AssertionError", "NotImplementedError"}),
     ("integration_validation", "052c772", "test_integration_validation.py", 4, {"AssertionError"}),
     ("workflow_recovery", "2cb17cd", "test_workflow_recovery.py", 4, {"NotImplementedError"}),
+    ("help", "013b983367a1dcba845a3fea24fc85150b540d29", "test_cli_help.py", 2, {"AssertionError"}),
 )
 
 
@@ -126,7 +127,7 @@ def replay(repo, output):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Replay the eight frozen feature RED checkpoints, or --verify them without executing pytest")
+        description="Replay the nine frozen feature RED checkpoints, or --verify them without executing pytest")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--output", type=Path)
