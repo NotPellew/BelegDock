@@ -55,6 +55,17 @@ belegdock refresh
 belegdock upload SHA256_HASH
 ```
 
+For a local desktop view of the same workflow, run `belegdock desktop`. Choose a
+Gmail label, select attachments by filename and size, and choose Prepare selected
+documents. Preparing saves selected files locally and sends nothing to Lexware.
+Review and send displays one compact row per staged document; selecting a row
+shows the full Lexware file and voucher IDs with copy actions. Sending one staged
+document requires a confirmation. The desktop surface performs only user-triggered, single-flight
+operations; it does not poll, retry, or offer uncertain-upload reconciliation.
+If a document is `uploading` or `uncertain`, use the CLI recovery guidance above.
+Python must be installed with Tk support; the command reports a clear error when
+that optional desktop dependency is unavailable.
+
 Repeat `--select` for more attachments. Scanning does not upload; Gmail message responses may include inline attachment
 bytes, but only explicitly selected attachments are staged. PDF/XML filenames identify candidates, not
 verified invoices. The conservative size limit is 5,000,000 bytes per attachment.
@@ -127,5 +138,5 @@ Gmail scan/staging, and Lexware upload and rejection handling.
 - [Feature form](https://github.com/NotPellew/BelegDock/issues/new?template=feature.yml):
   refine work in an issue; keep delivery evidence in its PR.
 
-Public Gmail onboarding, scheduling, GUI and document archiving remain deferred.
+Public Gmail onboarding, scheduling, and document archiving remain deferred.
 Licensed under the Apache License, Version 2.0; see [LICENSE](LICENSE).
