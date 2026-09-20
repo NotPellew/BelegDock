@@ -13,6 +13,20 @@ from .workflow import DocumentRejected, LocalIntegrityError, Store
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
+QUICK_START = """quick start:
+  belegdock login-gmail --client CLIENT_JSON
+  belegdock login-lexware
+  belegdock scan --label LABEL
+  belegdock stage --label LABEL --select MESSAGE_ID:PART_ID
+  belegdock documents
+  belegdock refresh
+  belegdock upload SHA256_HASH
+
+recovery after an interrupted upload:
+  belegdock recover-upload SHA256_HASH
+  belegdock reconcile SHA256_HASH --file-id FILE_ID --voucher-id VOUCHER_ID
+  An uncertain upload is never retried automatically."""
+
 
 def build_gmail(credentials: Any) -> Any:
     return import_module("googleapiclient.discovery").build(
@@ -57,6 +71,8 @@ def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="belegdock",
         description="BelegDock early-stage CLI for local document transfer experiments.",
+        epilog=QUICK_START,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--data-dir", type=Path, help="Override local staging and SQLite directory")

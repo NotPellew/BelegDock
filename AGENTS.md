@@ -134,7 +134,7 @@ Reports are execution evidence, not tamper-proof audit records or independent
 proof of chronology; user review remains a separate check. Snapshot after approved test
 changes and before implementation. Preserve the earlier snapshot and logs.
 CI verifies frozen RED checkpoints with scripts/replay_red.py `--verify` on every
-push and pull request (Ubuntu and Windows, Python 3.14); the full 42-test replay
+push and pull request (Ubuntu and Windows, Python 3.14); the full 44-test replay
 executes nightly and on manual `workflow_dispatch` (Ubuntu/Windows × 3.12/3.14).
 A group is admitted only for a `tests/app` file with a checkpoint commit whose
 current bytes equal the checkpoint bytes; `--verify` enforces revision, byte
