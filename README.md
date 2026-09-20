@@ -56,9 +56,11 @@ belegdock upload SHA256_HASH
 ```
 
 For a local desktop view of the same workflow, run `belegdock desktop`. Choose a
-Gmail label, select attachments by filename and size, and stage them explicitly.
-Uploading one staged document requires a confirmation and shows the Lexware file
-and voucher IDs. The desktop surface performs only user-triggered, single-flight
+Gmail label, select attachments by filename and size, and choose Prepare selected
+documents. Preparing saves selected files locally and sends nothing to Lexware.
+Review and send displays one compact row per staged document; selecting a row
+shows the full Lexware file and voucher IDs with copy actions. Sending one staged
+document requires a confirmation. The desktop surface performs only user-triggered, single-flight
 operations; it does not poll, retry, or offer uncertain-upload reconciliation.
 If a document is `uploading` or `uncertain`, use the CLI recovery guidance above.
 Python must be installed with Tk support; the command reports a clear error when
