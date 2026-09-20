@@ -38,6 +38,8 @@ class WorkflowCliTests(unittest.TestCase):
     def test_stage_fetches_only_explicit_selection_then_upload_is_separate(self):
         remote = Mock()
         remote.upload.return_value = {"id": "file", "voucherId": "voucher"}
+        remote.inventory.return_value = {"organizationId": "org-1", "files": []}
+        remote.hash_file.side_effect = AssertionError("empty inventory must not hash files")
         with patch.object(cli, "gmail_client", return_value=("test-account", self.gmail)), patch.object(cli, "lexware_client", return_value=remote):
             status, output, error = self.invoke("stage", "--label", "Test", "--select", "m:1")
             self.assertEqual(status, 0, error)
@@ -48,6 +50,7 @@ class WorkflowCliTests(unittest.TestCase):
         self.assertEqual(status, 0, error)
         self.assertEqual(json.loads(output)["voucherId"], "voucher")
         remote.upload.assert_called_once_with(b"%PDF", "one.pdf")
+        remote.inventory.assert_called_once()
 
     def test_unknown_selection_rejects_whole_request_before_fetch(self):
         with patch.object(cli, "gmail_client", return_value=("test-account", self.gmail)):
