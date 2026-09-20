@@ -51,6 +51,7 @@ Commands produce JSON; copy a candidate ID from `scan`, then a hash from `stage`
 belegdock scan --label "Rechnungen"
 belegdock stage --label "Rechnungen" --select "MESSAGE_ID:PART_ID"
 belegdock documents
+belegdock refresh
 belegdock upload SHA256_HASH
 ```
 
@@ -58,6 +59,14 @@ Repeat `--select` for more attachments. Scanning does not upload; Gmail message 
 bytes, but only explicitly selected attachments are staged. PDF/XML filenames identify candidates, not
 verified invoices. The conservative size limit is 5,000,000 bytes per attachment.
 Duplicate bytes share a blob while each source occurrence is retained.
+
+`refresh` reads the Lexware profile and both archived states of the paginated
+voucher inventory, then verifies each voucher's file links and hashes current
+file bytes. The cache is replaced only after a complete refresh; unchanged
+file metadata is reused. `upload` always refreshes and verifies a positive
+file/voucher match before sending a POST. Network GETs make at most five
+attempts for HTTP 429 responses, and remote files are streamed
+with a 5,000,000-byte limit.
 
 Data defaults to the OS application-data directory (`BelegDock`), with
 `state.sqlite3` and `blobs/`. Override it before the command, for example

@@ -1,13 +1,15 @@
-from collections.abc import Callable
-from contextlib import contextmanager
 import hashlib
+import json
 import os
-from pathlib import Path
 import re
 import sqlite3
 import sys
 import tempfile
-from typing import Any, Iterator
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 
 class DocumentRejected(RuntimeError):
@@ -20,6 +22,7 @@ class Store:
     def __init__(self, data_dir: Path):
         self.data_dir = Path(data_dir)
         self.blobs = self.data_dir / "blobs"
+        self._held_locks: set[str] = set()
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.blobs.mkdir(parents=True, exist_ok=True)
         with self._connection() as connection:
@@ -33,6 +36,7 @@ class Store:
                     id TEXT,
                     voucher_id TEXT,
                     rejection_status INTEGER
+                    ,origin TEXT
                 );
                 CREATE TABLE IF NOT EXISTS occurrences (
                     hash TEXT NOT NULL REFERENCES documents(hash),
@@ -42,11 +46,31 @@ class Store:
                     filename TEXT NOT NULL,
                     PRIMARY KEY (account, message_id, part_id)
                 );
+                CREATE TABLE IF NOT EXISTS remote_files (
+                    id TEXT PRIMARY KEY,
+                    voucher_id TEXT,
+                    digest TEXT NOT NULL,
+                    organization_id TEXT NOT NULL,
+                    archived INTEGER NOT NULL DEFAULT 0
+                    ,version TEXT
+                    ,metadata_hash TEXT NOT NULL DEFAULT ''
+                );
+                CREATE TABLE IF NOT EXISTS remote_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
                 """
             )
             columns = {row[1] for row in connection.execute("PRAGMA table_info(documents)")}
             if "rejection_status" not in columns:
                 connection.execute("ALTER TABLE documents ADD COLUMN rejection_status INTEGER")
+            if "origin" not in columns:
+                connection.execute("ALTER TABLE documents ADD COLUMN origin TEXT")
+            remote_columns = {row[1] for row in connection.execute("PRAGMA table_info(remote_files)")}
+            if "version" not in remote_columns:
+                connection.execute("ALTER TABLE remote_files ADD COLUMN version TEXT")
+            if "metadata_hash" not in remote_columns:
+                connection.execute("ALTER TABLE remote_files ADD COLUMN metadata_hash TEXT NOT NULL DEFAULT ''")
             connection.commit()
 
     def stage(
@@ -96,7 +120,7 @@ class Store:
     def list_documents(self) -> list[dict[str, Any]]:
         with self._connection() as connection:
             rows = connection.execute(
-                "SELECT hash, filename, size, status, id, voucher_id, rejection_status "
+                "SELECT hash, filename, size, status, id, voucher_id, rejection_status, origin "
                 "FROM documents ORDER BY hash"
             ).fetchall()
         return [
@@ -108,6 +132,7 @@ class Store:
                 "id": row[4],
                 "voucherId": row[5],
                 "rejectionStatus": row[6],
+                "origin": row[7],
             }
             for row in rows
         ]
@@ -128,33 +153,52 @@ class Store:
             for row in rows
         ]
 
-    def upload(self, digest: str, uploader: Callable[[bytes, str], dict[str, str]]) -> dict[str, str]:
+    def upload(
+        self,
+        digest: str,
+        uploader: Callable[[bytes, str], dict[str, str]],
+        refresh: Callable[[], Any] | None = None,
+        verify: Callable[[str, str], bytes] | None = None,
+    ) -> dict[str, str]:
         self._validate_digest(digest)
         with self._upload_lock(digest) as acquired:
             if not acquired:
                 raise RuntimeError("upload outcome is uncertain; reconcile before retry")
             with self._connection() as connection:
+                row = connection.execute("SELECT filename, status, id, voucher_id, rejection_status FROM documents WHERE hash=?", (digest,)).fetchone()
+            if row is None:
+                raise ValueError("unknown document hash")
+            filename, status, file_id, voucher_id, rejection_status = row
+            if status == "uploaded":
+                return {"id": file_id, "voucherId": voucher_id}
+            if status == "rejected":
+                raise DocumentRejected(rejection_status or 400)
+            if status in {"uploading", "uncertain"}:
+                raise RuntimeError("upload outcome is uncertain; reconcile before retry")
+            data = self._read_staged(digest)
+            if refresh is not None:
+                refresh()
+                presence = self.remote_presence(digest)
+                if presence["status"] == "already_present":
+                    if verify is None:
+                        raise RuntimeError("remote match requires current verification")
+                    verified = verify(presence["id"], presence["voucherId"])
+                    if not isinstance(verified, bytes) or hashlib.sha256(verified).hexdigest() != digest:
+                        raise RuntimeError("remote document does not match staged bytes")
+                    with self._connection() as connection:
+                        connection.execute(
+                            "UPDATE documents SET status='uploaded', id=?, voucher_id=?, rejection_status=NULL, origin='already_present' "
+                            "WHERE hash=? AND status='staged'",
+                            (presence["id"], presence.get("voucherId"), digest),
+                        )
+                        connection.commit()
+                    return {
+                        "id": presence["id"],
+                        "voucherId": presence["voucherId"],
+                        "status": "already_present",
+                    }
+            with self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
-                row = connection.execute(
-                    "SELECT filename, status, id, voucher_id, rejection_status FROM documents WHERE hash=?",
-                    (digest,),
-                ).fetchone()
-                if row is None:
-                    raise ValueError("unknown document hash")
-                filename, status, file_id, voucher_id, rejection_status = row
-                if status == "uploaded":
-                    return {"id": file_id, "voucherId": voucher_id}
-                if status == "rejected":
-                    raise DocumentRejected(rejection_status or 400)
-                if status in {"uploading", "uncertain"}:
-                    raise RuntimeError("upload outcome is uncertain; reconcile before retry")
-                path = self.blobs / digest
-                try:
-                    data = path.read_bytes()
-                except OSError as error:
-                    raise RuntimeError("staged document is unavailable") from error
-                if hashlib.sha256(data).hexdigest() != digest:
-                    raise RuntimeError("staged document integrity check failed")
                 connection.execute("UPDATE documents SET status='uploading' WHERE hash=?", (digest,))
                 connection.commit()
             try:
@@ -164,7 +208,7 @@ class Store:
             except DocumentRejected as error:
                 with self._connection() as connection:
                     connection.execute(
-                        "UPDATE documents SET status='rejected', rejection_status=? "
+                        "UPDATE documents SET status='rejected', rejection_status=?, origin=NULL "
                         "WHERE hash=? AND status='uploading'",
                         (error.status_code, digest),
                     )
@@ -182,12 +226,114 @@ class Store:
                 raise RuntimeError("upload outcome is uncertain; reconcile before retry") from error
             with self._connection() as connection:
                 connection.execute(
-                    "UPDATE documents SET status='uploaded', id=?, voucher_id=?, rejection_status=NULL "
+                    "UPDATE documents SET status='uploaded', id=?, voucher_id=?, rejection_status=NULL, origin=? "
                     "WHERE hash=? AND status='uploading'",
-                    (result["id"], result["voucherId"], digest),
+                    (result["id"], result["voucherId"], "unknown" if refresh is not None else None, digest),
                 )
                 connection.commit()
+            if refresh is not None:
+                return dict(result, status="accepted", origin="unknown")
             return result
+
+    def refresh_remote(self, organization_id: str, files: list[dict[str, Any]]) -> None:
+        if not isinstance(organization_id, str) or not organization_id:
+            raise ValueError("organization is invalid")
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            previous = connection.execute(
+                "SELECT value FROM remote_state WHERE key='organization_id'"
+            ).fetchone()
+            if previous is not None and previous[0] != organization_id:
+                raise RuntimeError("remote inventory organization does not match this state directory")
+            validated: list[tuple[Any, ...]] = []
+            seen: set[str] = set()
+            for item in files:
+                if not isinstance(item, dict):
+                    raise ValueError("remote inventory entry is invalid")
+                file_id, digest = item.get("id"), item.get("hash")
+                if not isinstance(file_id, str) or not file_id or file_id in seen or not isinstance(digest, str):
+                    raise ValueError("remote inventory entry is invalid")
+                self._validate_digest(digest)
+                if not isinstance(item.get("voucherId"), str) or not item["voucherId"]:
+                    raise ValueError("remote inventory voucher reference is invalid")
+                seen.add(file_id)
+                metadata_hash = hashlib.sha256(json.dumps({key: value for key, value in item.items() if key != "hash"}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                validated.append((file_id, item["voucherId"], digest, organization_id, bool(item.get("archived")), item.get("version"), metadata_hash))
+            if len({row[2] for row in validated}) != len(validated):
+                raise RuntimeError("remote inventory contains conflicting matches")
+            connection.execute("DELETE FROM remote_files")
+            connection.executemany(
+                "INSERT INTO remote_files(id, voucher_id, digest, organization_id, archived, version, metadata_hash) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                validated,
+            )
+            connection.execute(
+                "INSERT OR REPLACE INTO remote_state(key, value) VALUES ('organization_id', ?)",
+                (organization_id,),
+            )
+            connection.execute("INSERT OR REPLACE INTO remote_state(key, value) VALUES ('refresh_status', 'success')")
+            connection.execute("INSERT OR REPLACE INTO remote_state(key, value) VALUES ('refreshed_at', ?)", (datetime.now(timezone.utc).isoformat(),))
+            connection.commit()
+
+    def record_refresh_failure(self, message: str) -> None:
+        with self._connection() as connection:
+            connection.execute("INSERT OR REPLACE INTO remote_state(key, value) VALUES ('refresh_status', 'failed')")
+            connection.execute("INSERT OR REPLACE INTO remote_state(key, value) VALUES ('refresh_failed_at', ?)", (datetime.now(timezone.utc).isoformat(),))
+            connection.commit()
+
+    def remote_presence(self, digest: str) -> dict[str, str]:
+        self._validate_digest(digest)
+        with self._connection() as connection:
+            rows = connection.execute("SELECT id, voucher_id FROM remote_files WHERE digest=? ORDER BY id", (digest,)).fetchall()
+        if len(rows) > 1:
+            raise RuntimeError("remote inventory contains conflicting matches")
+        row = rows[0] if rows else None
+        if row is None:
+            return {"status": "absent"}
+        return {"status": "already_present", "id": row[0], "voucherId": row[1]}
+
+    def cached_remote_hash(self, organization_id: str, item: dict[str, Any]) -> str | None:
+        file_id = item.get("id")
+        if not isinstance(file_id, str) or not file_id:
+            return None
+        metadata_hash = hashlib.sha256(json.dumps({key: value for key, value in item.items() if key != "hash"}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        with self._connection() as connection:
+            row = connection.execute("SELECT digest FROM remote_files WHERE id=? AND organization_id=? AND metadata_hash=?", (file_id, organization_id, metadata_hash)).fetchone()
+        return row[0] if row else None
+
+    def remote_organization(self) -> str | None:
+        with self._connection() as connection:
+            row = connection.execute("SELECT value FROM remote_state WHERE key='organization_id'").fetchone()
+        return row[0] if row else None
+
+    def associate_remote(self, digest: str, file_id: str, voucher_id: str, verifier: Callable[[str, str], bytes]) -> dict[str, str]:
+        self._validate_digest(digest)
+        with self._upload_lock(digest) as acquired:
+            if not acquired:
+                raise RuntimeError("association is active")
+            with self._connection() as connection:
+                row = connection.execute("SELECT status FROM documents WHERE hash=?", (digest,)).fetchone()
+            if row is None:
+                raise ValueError("unknown document hash")
+            if row[0] != "staged":
+                raise RuntimeError("document is not staged")
+            self._read_staged(digest)
+            remote = verifier(file_id, voucher_id)
+            if not isinstance(remote, bytes) or hashlib.sha256(remote).hexdigest() != digest:
+                raise RuntimeError("remote document does not match staged bytes")
+            with self._connection() as connection:
+                connection.execute("UPDATE documents SET status='uploaded', id=?, voucher_id=?, origin='already_present' WHERE hash=? AND status='staged'", (file_id, voucher_id, digest))
+                connection.commit()
+        return {"id": file_id, "voucherId": voucher_id, "status": "already_present"}
+
+    def _read_staged(self, digest: str) -> bytes:
+        path = self.blobs / digest
+        try:
+            data = path.read_bytes()
+        except OSError as error:
+            raise RuntimeError("staged document is unavailable") from error
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise RuntimeError("staged document integrity check failed")
+        return data
 
     def reconcile(
         self,
@@ -260,6 +406,9 @@ class Store:
     @contextmanager
     def _upload_lock(self, digest: str) -> Iterator[bool]:
         self._validate_digest(digest)
+        if digest in self._held_locks:
+            yield False
+            return
         path = self.data_dir / f".{digest}.upload.lock"
         with path.open("a+b") as handle:
             acquired = False
@@ -271,12 +420,14 @@ class Store:
 
                     fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 acquired = True
+                self._held_locks.add(digest)
             except OSError:
                 pass
             try:
                 yield acquired
             finally:
                 if acquired:
+                    self._held_locks.discard(digest)
                     if sys.platform == "win32":
                         self._windows_lock(handle, "LK_UNLCK")
                     else:
