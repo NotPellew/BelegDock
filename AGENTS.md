@@ -8,9 +8,11 @@
   repository. Windows and Linux must both be verified.
 - Inspect current files and Git state before changing them. A read-only request
   never authorizes edits, commits, pushes, or cleanup.
-- Commit, push, release, and cleanup require authorization for those actions.
-  Before cleanup, check the exact target, clean state, and merged state; do not
-  delete branches without explicit permission.
+- Local commits at repository-defined or implementation checkpoints are
+  permitted by default after the checkpoint's required validation. Other
+  commits, pushes, releases, and cleanup require authorization for those
+  actions. Before cleanup, check the exact target, clean state, and merged
+  state; do not delete branches without explicit permission.
 
 ## Feature workflow
 
@@ -22,8 +24,8 @@ evidence. Do not maintain duplicate feature specifications in docs/.
 2. Map acceptance criteria to tests and establish a passing existing baseline.
 3. Write each feature test before its corresponding behavior. Execute it against
    the code missing that behavior and observe the intended failure (RED).
-4. Record the test snapshot and evidence before implementation. Use a test-only
-   checkpoint commit when committing is authorized.
+4. Record the test snapshot and evidence before implementation. A test-only
+   checkpoint commit is permitted.
 5. Implement the smallest sufficient change. Run the unchanged tests (GREEN),
    then refactor with tests remaining green.
 6. Review the complete relevant diff against the issue, including failure cases,
