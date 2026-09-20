@@ -3,8 +3,10 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import sys
 import tempfile
+from urllib.parse import quote
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -18,11 +20,30 @@ class DocumentRejected(RuntimeError):
         super().__init__(f"Lexware rejected document (HTTP {status_code})")
 
 
+class LocalIntegrityError(RuntimeError):
+    pass
+
+
 class Store:
     def __init__(self, data_dir: Path):
         self.data_dir = Path(data_dir)
         self.blobs = self.data_dir / "blobs"
         self._held_locks: set[str] = set()
+        state_path = self.data_dir / "state.sqlite3"
+        if self.data_dir.exists():
+            if not self.data_dir.is_dir():
+                raise LocalIntegrityError("data path is not a directory; restore the complete data directory")
+            entries = list(self.data_dir.iterdir())
+            if entries and not state_path.exists():
+                raise LocalIntegrityError("state database is missing; restore the complete data directory")
+            if state_path.exists():
+                try:
+                    state_info = state_path.lstat()
+                except OSError as error:
+                    raise LocalIntegrityError("state database is unavailable; restore the complete data directory") from error
+                if not stat.S_ISREG(state_info.st_mode) or state_info.st_size == 0:
+                    raise LocalIntegrityError("state database is incomplete; restore the complete data directory")
+                self._preflight_database(state_path)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.blobs.mkdir(parents=True, exist_ok=True)
         with self._connection() as connection:
@@ -73,6 +94,25 @@ class Store:
                 connection.execute("ALTER TABLE remote_files ADD COLUMN metadata_hash TEXT NOT NULL DEFAULT ''")
             connection.commit()
 
+    @staticmethod
+    def _preflight_database(state_path: Path) -> None:
+        database_uri = f"file:{quote(str(state_path), safe='/')}?mode=ro"
+        try:
+            connection = sqlite3.connect(database_uri, uri=True, timeout=1)
+            try:
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )
+                }
+            finally:
+                connection.close()
+        except (OSError, sqlite3.DatabaseError) as error:
+            raise LocalIntegrityError("state database is corrupt; restore the complete data directory") from error
+        if "documents" not in tables:
+            raise LocalIntegrityError("state database is incomplete; restore the complete data directory")
+
     def stage(
         self,
         account: str,
@@ -89,13 +129,10 @@ class Store:
             raise ValueError("document exceeds the 5,000,000 byte limit")
         digest = hashlib.sha256(data).hexdigest()
         target = self.blobs / digest
-        if target.exists():
-            try:
-                existing_data = target.read_bytes()
-            except OSError as error:
-                raise RuntimeError("existing staged document is unavailable") from error
-            if hashlib.sha256(existing_data).hexdigest() != digest:
-                raise RuntimeError("existing staged document integrity check failed")
+        if target.exists() or target.is_symlink():
+            integrity = self._blob_integrity(digest, len(data))
+            if integrity != "ok":
+                raise LocalIntegrityError(f"existing staged document integrity check failed: blob is {integrity}")
         else:
             self._write_blob(target, data)
         with self._connection() as connection:
@@ -133,6 +170,7 @@ class Store:
                 "voucherId": row[5],
                 "rejectionStatus": row[6],
                 "origin": row[7],
+                "localIntegrity": self._blob_integrity(row[0], row[2]),
             }
             for row in rows
         ]
@@ -170,6 +208,7 @@ class Store:
                 raise ValueError("unknown document hash")
             filename, status, file_id, voucher_id, rejection_status = row
             if status == "uploaded":
+                self._read_staged(digest)
                 return {"id": file_id, "voucherId": voucher_id}
             if status == "rejected":
                 raise DocumentRejected(rejection_status or 400)
@@ -326,14 +365,64 @@ class Store:
         return {"id": file_id, "voucherId": voucher_id, "status": "already_present"}
 
     def _read_staged(self, digest: str) -> bytes:
+        with self._connection() as connection:
+            row = connection.execute("SELECT size FROM documents WHERE hash=?", (digest,)).fetchone()
+        if row is None:
+            raise ValueError("unknown document hash")
+        size = row[0]
+        integrity = self._blob_integrity(digest, size)
+        if integrity != "ok":
+            raise LocalIntegrityError(f"staged document integrity check failed: blob is {integrity}")
         path = self.blobs / digest
         try:
-            data = path.read_bytes()
+            with path.open("rb") as handle:
+                data = handle.read(size)
+                if len(data) != size or handle.read(1):
+                    raise LocalIntegrityError("staged document integrity check failed")
         except OSError as error:
-            raise RuntimeError("staged document is unavailable") from error
+            raise LocalIntegrityError("staged document integrity check failed: blob is unreadable") from error
         if hashlib.sha256(data).hexdigest() != digest:
-            raise RuntimeError("staged document integrity check failed")
+            raise LocalIntegrityError("staged document integrity check failed: blob is corrupt")
         return data
+
+    def _blob_integrity(self, digest: str, expected_size: int) -> str:
+        try:
+            self._validate_digest(digest)
+        except ValueError:
+            return "corrupt"
+        path = self.blobs / digest
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            return "missing"
+        except OSError:
+            return "unreadable"
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or not isinstance(expected_size, int)
+            or expected_size < 0
+            or expected_size > 5_000_000
+        ):
+            return "corrupt"
+        if info.st_size != expected_size:
+            return "corrupt"
+        hasher = hashlib.sha256()
+        remaining = expected_size
+        try:
+            with path.open("rb") as handle:
+                while remaining:
+                    chunk = handle.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        return "corrupt"
+                    hasher.update(chunk)
+                    remaining -= len(chunk)
+                if handle.read(1):
+                    return "corrupt"
+        except FileNotFoundError:
+            return "missing"
+        except OSError:
+            return "unreadable"
+        return "ok" if hasher.hexdigest() == digest else "corrupt"
 
     def reconcile(
         self,
@@ -356,13 +445,7 @@ class Store:
                     raise ValueError("unknown document hash")
                 if row[0] != "uncertain":
                     raise RuntimeError("only an uncertain upload can be reconciled")
-            path = self.blobs / digest
-            try:
-                data = path.read_bytes()
-            except OSError as error:
-                raise RuntimeError("staged document is unavailable") from error
-            if hashlib.sha256(data).hexdigest() != digest:
-                raise RuntimeError("staged document integrity check failed")
+            self._read_staged(digest)
             remote_data = verifier(file_id, voucher_id)
             if not isinstance(remote_data, bytes) or hashlib.sha256(remote_data).hexdigest() != digest:
                 raise RuntimeError("remote document does not match staged bytes")
