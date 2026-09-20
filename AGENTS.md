@@ -159,6 +159,10 @@ the ordinary user terminal, outside the credential-free developer boundary.
 
 - Keep one package/process, focused modules, and minimal dependencies. Extract
   abstractions from demonstrated needs; do not build a general workflow engine.
+- Treat temporary desktop UI as replaceable: keep Gmail/Lexware workflow
+  operations in widget-free services and confine Tk layout and event handling to
+  the desktop view. For UI changes, complement offline tests with a synthetic
+  native-Tk check when available, covering label selection and wide/narrow layouts.
 - Ordinary tests are offline, deterministic, credential-free, and use synthetic
   fixtures. Live Gmail/Lexware tests require explicit authorization and test data.
 - Never log credentials or document contents. Treat external mail and filenames
