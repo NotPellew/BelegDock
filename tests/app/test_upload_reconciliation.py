@@ -26,6 +26,18 @@ class Client:
     def __init__(self, post_response):
         self.post_response = post_response
         self.posts = []
+        self.gets = []
+
+    def get(self, url, *args, **kwargs):
+        self.gets.append((url, args, kwargs))
+        if url == "https://api.lexware.io/v1/profile":
+            return Response(200, {"organizationId": "org-1"})
+        if url == "https://api.lexware.io/v1/voucherlist":
+            return Response(200, {
+                "content": [], "last": True, "number": 0,
+                "totalPages": 0, "totalElements": 0, "size": 250,
+            })
+        raise AssertionError("unexpected inventory endpoint")
 
     def post(self, *args, **kwargs):
         self.posts.append((args, kwargs))

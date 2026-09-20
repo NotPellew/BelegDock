@@ -19,7 +19,7 @@ GROUPS = (
     ("accounts", "439ced7", "test_accounts.py", 5, {"AssertionError"}),
     ("integrations", "0c57455", "test_integrations.py", 7, {"AssertionError"}),
     ("workflow", "0c57455", "test_workflow.py", 12, {"NotImplementedError"}),
-    ("commands", "a79ffc4", "test_cli_workflow.py", 5, {"AssertionError"}),
+    ("commands", "680b1700e8017e2e4a83f8acf9d50252baa92b3f", "test_cli_workflow.py", 5, {"AssertionError"}),
     ("login", "afc60ac", "test_login.py", 3, {"AssertionError", "NotImplementedError"}),
     ("integration_validation", "052c772", "test_integration_validation.py", 4, {"AssertionError"}),
     ("workflow_recovery", "2cb17cd", "test_workflow_recovery.py", 4, {"NotImplementedError"}),

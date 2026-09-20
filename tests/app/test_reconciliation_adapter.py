@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import unittest
 
 from belegdock.integrations import LexwareAdapter
@@ -13,11 +14,20 @@ class Response:
     def json(self):
         return self._body
 
+    def iter_bytes(self, chunk_size=65536):
+        for offset in range(0, len(self.content), chunk_size):
+            yield self.content[offset:offset + chunk_size]
+
 
 class Client:
     def __init__(self, responses):
         self.responses = list(responses)
         self.calls = []
+
+    @contextmanager
+    def stream(self, method, *args, **kwargs):
+        assert method == "GET"
+        yield self.get(*args, **kwargs)
 
     def get(self, *args, **kwargs):
         self.calls.append((args, kwargs))

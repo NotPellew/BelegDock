@@ -63,9 +63,11 @@ These are module responsibilities, not separate services or a plugin system.
 1. Discover attachment candidates in the selected label without changing mail.
 2. Stage selected bytes durably and compute their SHA-256 hashes.
 3. Record document identity and every source occurrence.
-4. Upload only explicitly selected documents and retain returned identifiers.
-5. Record documented HTTP 400/406 rejections separately from uncertain remote outcomes.
-6. Reconcile an uncertain result only through explicit remote file and voucher reads.
+4. Refresh the organization-bound remote inventory before upload; verify an
+   existing file's current bytes and voucher link before associating it.
+5. Upload only explicitly selected documents and retain returned identifiers.
+6. Record documented HTTP 400/406 rejections separately from uncertain remote outcomes.
+7. Reconcile an uncertain result only through explicit remote file and voucher reads.
 
 The upload spike must establish recovery after an ambiguous result before
 automatic retries are introduced. A local transaction cannot include an HTTP
@@ -86,6 +88,12 @@ and host sockets are not. The session gets a temporary home and /tmp.
 ## 8. Crosscutting concepts
 
 - SQLite holds processing state; ordinary files hold original attachment bytes.
+- The explicit `refresh` command reads `/v1/profile`, paginated `/v1/voucherlist`
+  for all four bookkeeping types and both archive states, then reads voucher
+  details and streams file hashes. A complete result atomically replaces the
+  organization-bound cache; cached hashes are reused only when file metadata
+  is unchanged. GET rate limits retry at most five times and files are bounded
+  at 5,000,000 bytes.
 - SHA-256 identifies byte-identical documents. Keep separate source occurrences;
   do not claim detection of semantically identical invoices with different bytes.
 - Staging survives interruptions until an upload can be resolved. Optional

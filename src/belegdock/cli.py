@@ -1,10 +1,10 @@
 import argparse
-from collections.abc import Sequence
 import getpass
-from importlib import import_module
 import json
-from pathlib import Path
 import sys
+from collections.abc import Sequence
+from importlib import import_module
+from pathlib import Path
 from typing import Any
 
 from . import __version__, accounts
@@ -70,6 +70,7 @@ def make_parser() -> argparse.ArgumentParser:
         if name == "stage":
             command.add_argument("--select", action="append", required=True, help="Candidate ID from scan; repeat to select more")
     commands.add_parser("documents", help="List local documents and transfer states")
+    commands.add_parser("refresh", help="Refresh the local Lexware file inventory")
     upload = commands.add_parser("upload", help="Explicitly upload one staged hash")
     upload.add_argument("hash")
     recover = commands.add_parser("recover-upload", help="Mark an interrupted local upload as uncertain")
@@ -100,13 +101,26 @@ def dispatch(args: argparse.Namespace) -> Any:
     store = Store(data_dir)
     if args.command == "documents":
         return store.list_documents()
+    if args.command == "refresh":
+        remote = lexware_client()
+        try:
+            return refresh_remote_inventory(store, remote)
+        finally:
+            client = getattr(remote, "client", None)
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
     if args.command == "stage":
         return [store.stage(account, item["message_id"], item["part_id"], item["filename"], gmail.fetch(item))
                 for item in candidates if item["id"] in selected]
     if args.command == "upload":
         remote = lexware_client()
         try:
-            return store.upload(args.hash, remote.upload)
+            client = getattr(remote, "client", None)
+            def refresh() -> dict[str, Any]:
+                return refresh_remote_inventory(store, remote)
+            verify = getattr(remote, "verify_existing", None)
+            return store.upload(args.hash, remote.upload, refresh, verify=verify if callable(verify) else None)
         finally:
             client = getattr(remote, "client", None)
             close = getattr(client, "close", None)
@@ -124,6 +138,22 @@ def dispatch(args: argparse.Namespace) -> Any:
             if callable(close):
                 close()
     raise ValueError("Choose a command from --help.")
+
+
+def refresh_remote_inventory(store: Store, remote: LexwareAdapter) -> dict[str, Any]:
+    try:
+        inventory = remote.inventory(include_archived=True, expected_organization_id=store.remote_organization())
+        files = []
+        for item in inventory["files"]:
+            enriched = dict(item)
+            cached = store.cached_remote_hash(inventory["organizationId"], item)
+            enriched["hash"] = cached if cached is not None else remote.hash_file(item["id"])
+            files.append(enriched)
+        store.refresh_remote(inventory["organizationId"], files)
+        return {"organizationId": inventory["organizationId"], "count": len(files)}
+    except Exception:
+        store.record_refresh_failure("remote_refresh_failed")
+        raise
 
 
 def main(argv: Sequence[str] | None = None) -> int:
