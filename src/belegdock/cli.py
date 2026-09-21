@@ -89,15 +89,15 @@ def valid_document_hash(digest: str) -> bool:
     return True
 
 
-def document_status(data_dir: Path, digest: str) -> str | None:
+def document_status(data_dir: Path, digest: str) -> tuple[str | None, bool]:
     try:
         for document in Store(data_dir).list_documents():
             if document.get("hash") == digest:
                 status = document.get("status")
-                return status if isinstance(status, str) else None
+                return (status if isinstance(status, str) else None), True
     except Exception:
-        return None
-    return None
+        return None, False
+    return None, True
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -243,8 +243,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not valid_document_hash(args.hash):
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
-                status = document_status(args.data_dir or default_data_dir(), args.hash)
-                if status == "uncertain":
+                status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
+                if not status_available:
+                    message = (
+                        f"Upload outcome could not be checked for {args.hash}; do not retry. Inspect local state "
+                        "and Lexware before choosing a recovery command."
+                    )
+                elif status == "uncertain":
                     message = (
                         f"Upload outcome is uncertain for {args.hash}; do not retry. Inspect Lexware, then run "
                         f"'{reconcile_command(args.hash)}'."
@@ -260,7 +265,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not valid_document_hash(args.hash):
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
-                status = document_status(args.data_dir or default_data_dir(), args.hash)
+                status, _ = document_status(args.data_dir or default_data_dir(), args.hash)
                 if status == "uncertain":
                     message = (
                         f"Recovery is not needed; the outcome for {args.hash} is already uncertain. Do not retry "
@@ -277,7 +282,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not valid_document_hash(args.hash):
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
-                status = document_status(args.data_dir or default_data_dir(), args.hash)
+                status, _ = document_status(args.data_dir or default_data_dir(), args.hash)
                 if status == "uncertain":
                     message = (
                         f"Reconciliation failed for {args.hash}; the document remains uncertain. Do not retry the "
