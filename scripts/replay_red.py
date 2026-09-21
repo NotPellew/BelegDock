@@ -24,6 +24,17 @@ GROUPS = (
     ("integration_validation", "052c772", "test_integration_validation.py", 4, {"AssertionError"}),
     ("workflow_recovery", "2cb17cd", "test_workflow_recovery.py", 4, {"NotImplementedError"}),
     ("help", "013b983367a1dcba845a3fea24fc85150b540d29", "test_cli_help.py", 2, {"AssertionError"}),
+    ("recovery_commands", "f08c675", "test_cli_recovery_commands.py", 3, {"AssertionError"}),
+    ("recovery_review_regressions", "2c8a7a5", "test_cli_recovery_review_regressions.py", 2, {"AssertionError"}),
+    ("recovery_state_guidance", "f80559e", "test_cli_recovery_state_guidance.py", 2, {"AssertionError"}),
+    ("recovery_state_unavailable", "2e17ec9", "test_cli_recovery_state_unavailable.py", 2, {"AssertionError"}),
+    ("recovery_unavailable_commands", "dc6816a", "test_cli_recovery_unavailable_commands.py", 2, {"AssertionError"}),
+    ("recovery_integrity_guidance", "5e9bd53", "test_cli_recovery_integrity_guidance.py", 2, {"AssertionError"}),
+    ("recover_upload_integrity", "d22d75e", "test_cli_recover_upload_integrity.py", 1, {"AssertionError"}),
+    ("recovery_status_lookup", "d809154", "test_cli_recovery_status_lookup.py", 1, {"AssertionError"}),
+    ("rejected_upload_guidance", "9d84cdb", "test_cli_rejected_upload_guidance.py", 1, {"AssertionError"}),
+    ("uploaded_upload_guidance", "f9c5e03", "test_cli_uploaded_upload_guidance.py", 1, {"AssertionError"}),
+    ("recovery_lock_guidance", "be0401c", "test_cli_recovery_lock_guidance.py", 3, {"AssertionError"}),
 )
 
 
@@ -127,7 +138,7 @@ def replay(repo, output):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Replay the nine frozen feature RED checkpoints, or --verify them without executing pytest")
+        description=f"Replay the {len(GROUPS)} frozen feature RED checkpoints, or --verify them without executing pytest")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--output", type=Path)

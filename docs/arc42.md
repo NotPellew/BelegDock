@@ -156,9 +156,11 @@ and host sockets are not. The session gets a temporary home and /tmp.
   other HTTP errors, transport failures and malformed success responses remain
   uncertain. A rejected hash is never resent; corrected bytes are a new staged
   document. `recover-upload` can move only a lock-free `uploading` record to
-  uncertain after a local process has ended. It does not prove a remote outcome
-  or authorize a retry. `reconcile` reads the operator-supplied file and voucher,
-  requires the voucher to reference that file, and compares downloaded bytes to
+  uncertain after a local process has ended. It first verifies staged bytes;
+  damaged or unavailable bytes leave the record `uploading` with restore guidance.
+  It does not prove a remote outcome or authorize a retry. `reconcile` reads the
+  operator-supplied file and voucher, requires the voucher to reference that file,
+  and compares downloaded bytes to
   the staged hash before recording IDs. It leaves failures uncertain. A remote
   absence search and retry after uncertainty remain deferred.
   The first start against an older state database must run alone to apply its local

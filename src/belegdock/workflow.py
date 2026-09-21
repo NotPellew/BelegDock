@@ -24,6 +24,10 @@ class LocalIntegrityError(RuntimeError):
     pass
 
 
+class TransferActiveError(RuntimeError):
+    pass
+
+
 class Store:
     def __init__(self, data_dir: Path):
         self.data_dir = Path(data_dir)
@@ -154,12 +158,19 @@ class Store:
             connection.commit()
         return digest
 
-    def list_documents(self) -> list[dict[str, Any]]:
+    def list_documents(self, digest: str | None = None) -> list[dict[str, Any]]:
+        query = (
+            "SELECT hash, filename, size, status, id, voucher_id, rejection_status, origin "
+            "FROM documents"
+        )
+        parameters: tuple[str, ...] = ()
+        if digest is not None:
+            self._validate_digest(digest)
+            query += " WHERE hash=?"
+            parameters = (digest,)
+        query += " ORDER BY hash"
         with self._connection() as connection:
-            rows = connection.execute(
-                "SELECT hash, filename, size, status, id, voucher_id, rejection_status, origin "
-                "FROM documents ORDER BY hash"
-            ).fetchall()
+            rows = connection.execute(query, parameters).fetchall()
         return [
             {
                 "hash": row[0],
@@ -201,7 +212,7 @@ class Store:
         self._validate_digest(digest)
         with self._upload_lock(digest) as acquired:
             if not acquired:
-                raise RuntimeError("upload outcome is uncertain; reconcile before retry")
+                raise TransferActiveError("upload outcome is uncertain; reconcile before retry")
             with self._connection() as connection:
                 row = connection.execute("SELECT filename, status, id, voucher_id, rejection_status FROM documents WHERE hash=?", (digest,)).fetchone()
             if row is None:
@@ -436,7 +447,7 @@ class Store:
             raise ValueError("remote IDs are invalid")
         with self._upload_lock(digest) as acquired:
             if not acquired:
-                raise RuntimeError("reconciliation is active")
+                raise TransferActiveError("reconciliation is active")
             with self._connection() as connection:
                 row = connection.execute(
                     "SELECT status FROM documents WHERE hash=?", (digest,)
@@ -463,14 +474,16 @@ class Store:
         self._validate_digest(digest)
         with self._upload_lock(digest) as acquired:
             if not acquired:
-                raise RuntimeError("upload is active and cannot be recovered")
+                raise TransferActiveError("upload is active and cannot be recovered")
             with self._connection() as connection:
-                connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute("SELECT status FROM documents WHERE hash=?", (digest,)).fetchone()
                 if row is None:
                     raise ValueError("unknown document hash")
                 if row[0] != "uploading":
                     raise RuntimeError("only an interrupted upload can be recovered")
+            self._read_staged(digest)
+            with self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
                 connection.execute(
                     "UPDATE documents SET status='uncertain' WHERE hash=? AND status='uploading'", (digest,)
                 )

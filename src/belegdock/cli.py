@@ -11,9 +11,10 @@ from . import __version__, accounts
 from .integrations import GmailAdapter, LexwareAdapter
 from .desktop import DesktopUnavailableError, run_desktop
 from .service import refresh_remote_inventory as _refresh_remote_inventory
-from .workflow import DocumentRejected, LocalIntegrityError, Store
+from .workflow import DocumentRejected, LocalIntegrityError, Store, TransferActiveError
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+LOCAL_INTEGRITY_FAILED = "local_integrity_failed"
 
 QUICK_START = """quick start:
   belegdock login-gmail --client CLIENT_JSON
@@ -71,6 +72,50 @@ def lexware_client() -> LexwareAdapter:
 
 def default_data_dir() -> Path:
     return Path(import_module("platformdirs").user_data_dir("BelegDock", appauthor=False))
+
+
+def recover_upload_command(digest: str) -> str:
+    return f"belegdock recover-upload {digest}"
+
+
+def reconcile_command(digest: str) -> str:
+    return f"belegdock reconcile {digest} --file-id FILE_ID --voucher-id VOUCHER_ID"
+
+
+def transfer_active_wait_message(digest: str) -> str:
+    return f"Another operation is active for {digest}; wait for it to finish. Do not retry."
+
+
+def recovery_state_unavailable_message(digest: str) -> str:
+    return (
+        f"Recovery state could not be checked for {digest}; do not retry the upload. "
+        "Restore or inspect local state before choosing a recovery command."
+    )
+
+
+def local_integrity_restore_message() -> str:
+    return "Local document integrity failed; restore state.sqlite3 and blobs from a consistent backup."
+
+
+def valid_document_hash(digest: str) -> bool:
+    try:
+        Store._validate_digest(digest)
+    except ValueError:
+        return False
+    return True
+
+
+def document_status(data_dir: Path, digest: str) -> tuple[str | None, bool]:
+    try:
+        for document in Store(data_dir).list_documents(digest):
+            if document.get("hash") == digest:
+                status = document.get("status")
+                if document.get("localIntegrity") != "ok":
+                    return LOCAL_INTEGRITY_FAILED, True
+                return (status if isinstance(status, str) else None), True
+    except Exception:
+        return None, False
+    return None, True
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -186,7 +231,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             item.get("localIntegrity") != "ok" for item in result
         ):
             print(
-                "Local document integrity failed; restore state.sqlite3 and blobs from a consistent backup.",
+                local_integrity_restore_message(),
                 file=sys.stderr,
             )
             return 1
@@ -203,6 +248,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
+    except TransferActiveError:
+        if args.command == "recover-upload":
+            print(
+                "Recovery failed; an active upload cannot be recovered. Wait for it to finish. If the "
+                f"process stopped before reporting an outcome, run '{recover_upload_command(args.hash)}'.",
+                file=sys.stderr,
+            )
+        else:
+            print(transfer_active_wait_message(args.hash), file=sys.stderr)
+        return 1
     except DesktopUnavailableError:
         print(
             "Desktop UI is unavailable; install Python Tk support and run 'belegdock desktop' again.",
@@ -213,11 +268,83 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "stage":
             message = "Staging failed; check selection, connection, file size, and local storage."
         elif args.command == "upload":
-            message = "Upload failed; inspect documents. Uncertain outcomes require manual reconciliation before retry."
+            if not valid_document_hash(args.hash):
+                message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
+            else:
+                status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
+                if status == LOCAL_INTEGRITY_FAILED:
+                    message = local_integrity_restore_message()
+                elif not status_available:
+                    message = (
+                        f"Upload outcome could not be checked for {args.hash}; do not retry. Inspect local state "
+                        "and Lexware before choosing a recovery command."
+                    )
+                elif status == "rejected":
+                    message = "Document was rejected; correct it and stage new bytes."
+                elif status == "uploaded":
+                    message = (
+                        f"Upload is already recorded for {args.hash}; do not retry. Run 'belegdock documents' "
+                        "to inspect local state."
+                    )
+                elif status == "uncertain":
+                    message = (
+                        f"Upload outcome is uncertain for {args.hash}; do not retry. Inspect Lexware, then run "
+                        f"'{reconcile_command(args.hash)}'."
+                    )
+                elif status == "uploading":
+                    message = (
+                        f"Upload is already active for {args.hash}; do not retry. If its process stopped before "
+                        f"reporting an outcome, run '{recover_upload_command(args.hash)}'."
+                    )
+                else:
+                    message = "Upload failed before sending the document; correct the problem and retry."
         elif args.command == "recover-upload":
-            message = "Recovery failed; an active upload cannot be recovered. Inspect documents before reconciliation."
+            if not valid_document_hash(args.hash):
+                message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
+            else:
+                status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
+                if status == LOCAL_INTEGRITY_FAILED:
+                    message = local_integrity_restore_message()
+                elif not status_available:
+                    message = recovery_state_unavailable_message(args.hash)
+                elif status == "uncertain":
+                    message = (
+                        f"Recovery is not needed; the outcome for {args.hash} is already uncertain. Do not retry "
+                        f"the upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
+                    )
+                elif status == "uploading":
+                    message = (
+                        "Recovery failed; an active upload cannot be recovered. Wait for it to finish. If the "
+                        f"process stopped before reporting an outcome, run '{recover_upload_command(args.hash)}'."
+                    )
+                else:
+                    message = "Recovery did not start; only an interrupted upload can be recovered. Check documents."
         elif args.command == "reconcile":
-            message = "Reconciliation failed; the document remains uncertain. Do not retry the upload."
+            if not valid_document_hash(args.hash):
+                message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
+            else:
+                status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
+                if status == LOCAL_INTEGRITY_FAILED:
+                    message = local_integrity_restore_message()
+                elif not status_available:
+                    message = recovery_state_unavailable_message(args.hash)
+                elif status == "uncertain":
+                    message = (
+                        f"Reconciliation failed for {args.hash}; the document remains uncertain. Do not retry the "
+                        f"upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
+                    )
+                elif status == "staged":
+                    message = (
+                        f"Reconciliation did not start; the document is still staged. To send it explicitly, run "
+                        f"'belegdock upload {args.hash}'."
+                    )
+                elif status == "uploading":
+                    message = (
+                        "Reconciliation cannot run while an upload is active. If the process stopped before "
+                        f"reporting an outcome, run '{recover_upload_command(args.hash)}'."
+                    )
+                else:
+                    message = "Reconciliation did not start; only an uncertain upload can be reconciled. Check documents."
         elif args.command.startswith("login"):
             message = "Connection failed; check the native credential store and account/client setup."
         elif args.command == "desktop":
