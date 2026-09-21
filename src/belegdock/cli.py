@@ -5,7 +5,7 @@ import sys
 from collections.abc import Sequence
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from . import __version__, accounts
 from .integrations import GmailAdapter, LexwareAdapter
@@ -44,6 +44,18 @@ class GermanArgumentParser(argparse.ArgumentParser):
             .replace("options:", "Optionen:", 1)
             .replace("show this help message and exit", "Diese Hilfe anzeigen und beenden", 1)
         )
+
+    def error(self, message: str) -> NoReturn:
+        translated = (
+            message.replace("the following arguments are required:", "Folgende Argumente sind erforderlich:")
+            .replace("expected one argument", "Ein Argument wird erwartet")
+            .replace("invalid choice:", "Ungültige Auswahl:")
+            .replace(" (choose from ", " (mögliche Werte: ")
+            .replace("unrecognized arguments:", "Unbekannte Argumente:")
+            .replace("argument ", "Argument ")
+        )
+        self.print_usage(sys.stderr)
+        self.exit(2, f"{self.prog}: Fehler: {translated}\n")
 
 
 def build_gmail(credentials: Any) -> Any:
