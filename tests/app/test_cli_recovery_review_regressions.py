@@ -33,8 +33,8 @@ class RecoveryGuidanceReviewRegressionTests(unittest.TestCase):
         self.assertEqual(output, "")
         self.assertEqual(Store(self.root).list_documents()[0]["status"], "staged")
         remote.upload.assert_not_called()
-        self.assertIn("before sending the document", error)
-        self.assertIn("retry", error)
+        self.assertIn("vor der Übertragung", error)
+        self.assertIn("erneut", error)
         self.assertNotIn("uncertain", error.lower())
         self.assertNotIn("recover-upload", error)
         self.assertNotIn("reconcile", error)
@@ -42,7 +42,7 @@ class RecoveryGuidanceReviewRegressionTests(unittest.TestCase):
 
     def test_invalid_hash_never_reaches_recovery_command_output(self):
         invalid_hash = "\x1b[31mnot-a-hash"
-        expected = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash.\n"
+        expected = "Ungültiger Dokument-Hash; führe 'belegdock documents' aus und kopiere einen SHA-256-Hash.\n"
         commands = (
             ("upload", invalid_hash),
             ("recover-upload", invalid_hash),
