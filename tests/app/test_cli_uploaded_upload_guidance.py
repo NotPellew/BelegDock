@@ -36,8 +36,8 @@ class UploadedUploadGuidanceCliTests(unittest.TestCase):
         self.assertEqual(output, "")
         self.assertEqual(store.list_documents(digest)[0]["status"], "uploaded")
         self.assertIn(
-            f"Upload is already recorded for {digest}; do not retry. Run 'belegdock documents' "+
-            "to inspect local state.",
+            f"Upload für {digest} ist bereits gespeichert; nicht erneut senden. Führe "+
+            "'belegdock documents' aus, um den lokalen Zustand zu prüfen.",
             error,
         )
         self.assertNotIn("private client failure", error)
