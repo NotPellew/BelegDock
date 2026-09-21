@@ -31,7 +31,7 @@ class RecoveryCommandCliTests(unittest.TestCase):
         remote.hash_file.side_effect = AssertionError("an empty inventory must not hash files")
         return remote
 
-    def test_uncertain_upload_prints_recovery_and_reconciliation_commands(self):
+    def test_uncertain_upload_prints_reconciliation_command_without_recovery(self):
         digest = self.stage_document()
         remote = self.make_remote()
         remote.upload.side_effect = ConnectionError("private provider response")
@@ -42,7 +42,7 @@ class RecoveryCommandCliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertEqual(Store(self.root).list_documents()[0]["status"], "uncertain")
-        self.assertIn(f"belegdock recover-upload {digest}", error)
+        self.assertNotIn(f"belegdock recover-upload {digest}", error)
         self.assertIn(
             f"belegdock reconcile {digest} --file-id FILE_ID --voucher-id VOUCHER_ID", error
         )
