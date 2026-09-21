@@ -24,6 +24,10 @@ class LocalIntegrityError(RuntimeError):
     pass
 
 
+class TransferActiveError(RuntimeError):
+    pass
+
+
 class Store:
     def __init__(self, data_dir: Path):
         self.data_dir = Path(data_dir)
@@ -208,7 +212,7 @@ class Store:
         self._validate_digest(digest)
         with self._upload_lock(digest) as acquired:
             if not acquired:
-                raise RuntimeError("upload outcome is uncertain; reconcile before retry")
+                raise TransferActiveError("upload outcome is uncertain; reconcile before retry")
             with self._connection() as connection:
                 row = connection.execute("SELECT filename, status, id, voucher_id, rejection_status FROM documents WHERE hash=?", (digest,)).fetchone()
             if row is None:
@@ -443,7 +447,7 @@ class Store:
             raise ValueError("remote IDs are invalid")
         with self._upload_lock(digest) as acquired:
             if not acquired:
-                raise RuntimeError("reconciliation is active")
+                raise TransferActiveError("reconciliation is active")
             with self._connection() as connection:
                 row = connection.execute(
                     "SELECT status FROM documents WHERE hash=?", (digest,)
@@ -470,7 +474,7 @@ class Store:
         self._validate_digest(digest)
         with self._upload_lock(digest) as acquired:
             if not acquired:
-                raise RuntimeError("upload is active and cannot be recovered")
+                raise TransferActiveError("upload is active and cannot be recovered")
             with self._connection() as connection:
                 row = connection.execute("SELECT status FROM documents WHERE hash=?", (digest,)).fetchone()
                 if row is None:

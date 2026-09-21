@@ -11,7 +11,7 @@ from . import __version__, accounts
 from .integrations import GmailAdapter, LexwareAdapter
 from .desktop import DesktopUnavailableError, run_desktop
 from .service import refresh_remote_inventory as _refresh_remote_inventory
-from .workflow import DocumentRejected, LocalIntegrityError, Store
+from .workflow import DocumentRejected, LocalIntegrityError, Store, TransferActiveError
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 LOCAL_INTEGRITY_FAILED = "local_integrity_failed"
@@ -80,6 +80,10 @@ def recover_upload_command(digest: str) -> str:
 
 def reconcile_command(digest: str) -> str:
     return f"belegdock reconcile {digest} --file-id FILE_ID --voucher-id VOUCHER_ID"
+
+
+def transfer_active_wait_message(digest: str) -> str:
+    return f"Another operation is active for {digest}; wait for it to finish. Do not retry."
 
 
 def recovery_state_unavailable_message(digest: str) -> str:
@@ -243,6 +247,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             "Local data is unavailable; restore state.sqlite3 and blobs from a consistent backup.",
             file=sys.stderr,
         )
+        return 1
+    except TransferActiveError:
+        if args.command == "recover-upload":
+            print(
+                "Recovery failed; an active upload cannot be recovered. Wait for it to finish. If the "
+                f"process stopped before reporting an outcome, run '{recover_upload_command(args.hash)}'.",
+                file=sys.stderr,
+            )
+        else:
+            print(transfer_active_wait_message(args.hash), file=sys.stderr)
         return 1
     except DesktopUnavailableError:
         print(
