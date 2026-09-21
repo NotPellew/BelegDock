@@ -465,12 +465,14 @@ class Store:
             if not acquired:
                 raise RuntimeError("upload is active and cannot be recovered")
             with self._connection() as connection:
-                connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute("SELECT status FROM documents WHERE hash=?", (digest,)).fetchone()
                 if row is None:
                     raise ValueError("unknown document hash")
                 if row[0] != "uploading":
                     raise RuntimeError("only an interrupted upload can be recovered")
+            self._read_staged(digest)
+            with self._connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
                 connection.execute(
                     "UPDATE documents SET status='uncertain' WHERE hash=? AND status='uploading'", (digest,)
                 )
