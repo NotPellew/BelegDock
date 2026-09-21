@@ -261,18 +261,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not valid_document_hash(args.hash):
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
-                message = (
-                    "Recovery failed; an active upload cannot be recovered. Wait for it to finish. If the "
-                    f"process stopped before reporting an outcome, run '{recover_upload_command(args.hash)}'."
-                )
+                status = document_status(args.data_dir or default_data_dir(), args.hash)
+                if status == "uncertain":
+                    message = (
+                        f"Recovery is not needed; the outcome for {args.hash} is already uncertain. Do not retry "
+                        f"the upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
+                    )
+                elif status == "uploading":
+                    message = (
+                        "Recovery failed; an active upload cannot be recovered. Wait for it to finish. If the "
+                        f"process stopped before reporting an outcome, run '{recover_upload_command(args.hash)}'."
+                    )
+                else:
+                    message = "Recovery did not start; only an interrupted upload can be recovered. Check documents."
         elif args.command == "reconcile":
             if not valid_document_hash(args.hash):
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
-                message = (
-                    f"Reconciliation failed for {args.hash}; the document remains uncertain. Do not retry the "
-                    f"upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
-                )
+                status = document_status(args.data_dir or default_data_dir(), args.hash)
+                if status == "uncertain":
+                    message = (
+                        f"Reconciliation failed for {args.hash}; the document remains uncertain. Do not retry the "
+                        f"upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
+                    )
+                elif status == "staged":
+                    message = (
+                        f"Reconciliation did not start; the document is still staged. To send it explicitly, run "
+                        f"'belegdock upload {args.hash}'."
+                    )
+                elif status == "uploading":
+                    message = (
+                        "Reconciliation cannot run while an upload is active. If the process stopped before "
+                        f"reporting an outcome, run '{recover_upload_command(args.hash)}'."
+                    )
+                else:
+                    message = "Reconciliation did not start; only an uncertain upload can be reconciled. Check documents."
         elif args.command.startswith("login"):
             message = "Connection failed; check the native credential store and account/client setup."
         elif args.command == "desktop":
