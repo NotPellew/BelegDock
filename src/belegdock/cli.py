@@ -16,7 +16,7 @@ from .workflow import DocumentRejected, LocalIntegrityError, Store, TransferActi
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 LOCAL_INTEGRITY_FAILED = "local_integrity_failed"
 
-QUICK_START = """quick start:
+QUICK_START = """Schnellstart:
   belegdock login-gmail --client CLIENT_JSON
   belegdock login-lexware
   belegdock scan --label LABEL
@@ -25,10 +25,15 @@ QUICK_START = """quick start:
   belegdock refresh
   belegdock upload SHA256_HASH
 
-recovery after an interrupted upload:
+Wiederherstellung nach einem unterbrochenen Sendevorgang:
   belegdock recover-upload SHA256_HASH
   belegdock reconcile SHA256_HASH --file-id FILE_ID --voucher-id VOUCHER_ID
-  An uncertain upload is never retried automatically."""
+  Ein unklares Sendeergebnis wird nie automatisch erneut gesendet."""
+
+
+class GermanArgumentParser(argparse.ArgumentParser):
+    def format_usage(self) -> str:
+        return super().format_usage().replace("usage:", "Aufruf:", 1)
 
 
 def build_gmail(credentials: Any) -> Any:
@@ -119,31 +124,49 @@ def document_status(data_dir: Path, digest: str) -> tuple[str | None, bool]:
 
 
 def make_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = GermanArgumentParser(
         prog="belegdock",
-        description="BelegDock early-stage CLI for local document transfer experiments.",
+        description="BelegDock-CLI für lokale Dokumentübertragungsexperimente in einer frühen Entwicklungsphase.",
         epilog=QUICK_START,
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False,
     )
-    parser.add_argument("--version", action="version", version=__version__)
-    parser.add_argument("--data-dir", type=Path, help="Override local staging and SQLite directory")
-    commands = parser.add_subparsers(dest="command")
-    login = commands.add_parser("login-gmail", help="Connect Gmail read-only through browser OAuth")
-    login.add_argument("--client", type=Path, required=True, help="Desktop OAuth client JSON outside checkout")
-    commands.add_parser("login-lexware", help="Store an API key using a hidden prompt")
+    parser.add_argument("-h", "--help", action="help", help="Diese Hilfe anzeigen und beenden")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=__version__,
+        help="Versionsnummer anzeigen und beenden",
+    )
+    parser.add_argument("--data-dir", type=Path, help="Lokales Staging- und SQLite-Verzeichnis überschreiben")
+    parser._optionals.title = "Optionen"
+    commands = parser.add_subparsers(dest="command", title="Befehle")
+    login = commands.add_parser("login-gmail", help="Gmail-Lesezugriff über Browser-OAuth verbinden")
+    login.add_argument(
+        "--client", type=Path, required=True, help="Desktop-OAuth-Client-JSON außerhalb des Checkouts"
+    )
+    commands.add_parser("login-lexware", help="API-Schlüssel über eine verdeckte Eingabe speichern")
     for name in ("scan", "stage"):
-        command = commands.add_parser(name, help="List candidates" if name == "scan" else "Stage selected attachments")
+        command = commands.add_parser(
+            name,
+            help="Kandidaten auflisten" if name == "scan" else "Ausgewählte Anhänge vorbereiten",
+        )
         command.add_argument("--label", required=True)
         if name == "stage":
-            command.add_argument("--select", action="append", required=True, help="Candidate ID from scan; repeat to select more")
-    commands.add_parser("documents", help="List local documents and transfer states")
-    commands.add_parser("desktop", help="Open the local desktop transfer interface")
-    commands.add_parser("refresh", help="Refresh the local Lexware file inventory")
-    upload = commands.add_parser("upload", help="Explicitly upload one staged hash")
+            command.add_argument(
+                "--select",
+                action="append",
+                required=True,
+                help="Kandidaten-ID aus scan; für mehrere Auswahl wiederholen",
+            )
+    commands.add_parser("documents", help="Lokale Dokumente und Übertragungsstatus auflisten")
+    commands.add_parser("desktop", help="Lokale Desktop-Oberfläche für die Dokumentübertragung öffnen")
+    commands.add_parser("refresh", help="Lokales Lexware-Dateiinventar aktualisieren")
+    upload = commands.add_parser("upload", help="Einen vorbereiteten Hash ausdrücklich senden")
     upload.add_argument("hash")
-    recover = commands.add_parser("recover-upload", help="Mark an interrupted local upload as uncertain")
+    recover = commands.add_parser("recover-upload", help="Unterbrochenes lokales Senden als unklar markieren")
     recover.add_argument("hash")
-    reconcile = commands.add_parser("reconcile", help="Verify a known remote document before recording it")
+    reconcile = commands.add_parser("reconcile", help="Bekanntes Remote-Dokument vor dem Speichern prüfen")
     reconcile.add_argument("hash")
     reconcile.add_argument("--file-id", required=True)
     reconcile.add_argument("--voucher-id", required=True)
@@ -260,7 +283,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     except DesktopUnavailableError:
         print(
-            "Desktop UI is unavailable; install Python Tk support and run 'belegdock desktop' again.",
+            "Desktop-Oberfläche ist nicht verfügbar; installiere Python-Tk-Unterstützung "
+            "und starte „belegdock desktop“ erneut.",
             file=sys.stderr,
         )
         return 1
@@ -346,9 +370,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else:
                     message = "Reconciliation did not start; only an uncertain upload can be reconciled. Check documents."
         elif args.command.startswith("login"):
-            message = "Connection failed; check the native credential store and account/client setup."
+            message = "Verbindung fehlgeschlagen; prüfe den nativen Anmeldedatenspeicher und die Konto-/Client-Einrichtung."
         elif args.command == "desktop":
-            message = "Desktop operation failed; check Python Tk support and account setup."
+            message = "Desktop-Vorgang fehlgeschlagen; prüfe die Python-Tk-Unterstützung und die Kontoeinrichtung."
         else:
             message = "Operation failed; check account connection, label, and local storage."
         print(message, file=sys.stderr)

@@ -8,24 +8,24 @@ class DesktopUiPolishContractTests(unittest.TestCase):
         self.assertTrue(hasattr(desktop, "format_size"))
         if not hasattr(desktop, "format_size"):
             return
-        self.assertEqual(desktop.format_size(0), "0 bytes")
-        self.assertEqual(desktop.format_size(512), "512 bytes")
-        self.assertEqual(desktop.format_size(1536), "1.5 KiB")
-        self.assertEqual(desktop.format_size(5_000_000), "4.8 MiB")
+        self.assertEqual(desktop.format_size(0), "0 Bytes")
+        self.assertEqual(desktop.format_size(512), "512 Bytes")
+        self.assertEqual(desktop.format_size(1536), "1,5 KiB")
+        self.assertEqual(desktop.format_size(5_000_000), "4,8 MiB")
 
     def test_status_codes_have_readable_labels(self):
         self.assertTrue(hasattr(desktop, "status_label"))
         if not hasattr(desktop, "status_label"):
             return
-        self.assertEqual(desktop.status_label("staged"), "Staged")
-        self.assertEqual(desktop.status_label("uploaded"), "Uploaded")
-        self.assertEqual(desktop.status_label("uncertain"), "Uncertain")
-        self.assertEqual(desktop.status_label("already_present"), "Already present in Lexware")
+        self.assertEqual(desktop.status_label("staged"), "Vorbereitet")
+        self.assertEqual(desktop.status_label("uploaded"), "Gesendet")
+        self.assertEqual(desktop.status_label("uncertain"), "Unklar")
+        self.assertEqual(desktop.status_label("already_present"), "Bereits in Lexware vorhanden")
 
     def test_prepare_disclaimer_is_exposed_without_a_workflow_stepper(self):
         self.assertFalse(hasattr(desktop, "WORKFLOW_STEPS"))
         self.assertIn(
-            "saves selected files locally and sends nothing to Lexware",
+            "Ausgewählte Dateien werden lokal gespeichert und nicht an Lexware gesendet.",
             getattr(desktop, "PREPARE_HELPER", ""),
         )
 

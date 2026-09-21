@@ -1,51 +1,61 @@
 # BelegDock
 
-A local CLI for explicitly selecting Gmail attachments and uploading them to
-Lexware Office without changing the mailbox.
+Eine lokale CLI zur ausdrücklichen Auswahl von Gmail-Anhängen und zur Übertragung
+von Dokumenten an Lexware Office, ohne das Postfach zu verändern.
 
 ## Status
 
-Early feasibility build, not a production release. Offline tests cover selection,
-staging, duplicates and uncertain uploads. Live Gmail-to-Lexware tests accepted
-plain PDF, ZUGFeRD PDF and standalone XML without changing labels or original
-messages. Local repeat-upload prevention passed for each format; a server duplicate
-check also passed for the plain PDF. A malformed XML was rejected (406); its
-corrected copy was accepted (202). Acceptance does not establish invoice validity
-or completed bookkeeping. The same live flow passed on native Windows through the
-built package, using Windows Credential Manager for both accounts. A live manual
-reconciliation of an interrupted upload also passed: the interrupted process left
-the document uncertain, and the document was recorded as uploaded only after the
-operator-supplied remote file and voucher verified the link and the downloaded
-bytes matched the staged hash. A mismatched remote file and a repeated
-reconciliation both failed without resending or changing the mailbox.
-Python 3.12+; Windows and Linux application checks run in CI. The separate protected
-developer launcher currently supports Linux only.
+Früher Machbarkeitsstand, keine Produktionsfreigabe. Offline-Tests decken Auswahl,
+Vorbereitung, Duplikate und unklare Sendeergebnisse ab. Live-Tests von Gmail bis
+Lexware akzeptierten einfache PDFs, ZUGFeRD-PDFs und eigenständige XML-Dateien,
+ohne Labels oder Originalnachrichten zu verändern. Die lokale Verhinderung erneuter
+Übertragungen bestand für jedes Format; eine serverseitige Duplikatprüfung bestand
+ebenfalls für das einfache PDF. Ein fehlerhaftes XML wurde abgelehnt (406), seine
+korrigierte Kopie wurde akzeptiert (202). Diese Akzeptanz bestätigt weder die
+Gültigkeit einer Rechnung noch den Abschluss der Buchhaltung. Dieselbe Live-Strecke
+bestand unter nativem Windows mit dem gebauten Paket und Windows Credential Manager
+für beide Konten. Eine manuelle Live-Abstimmung eines unterbrochenen Sendevorgangs
+bestand ebenfalls: Der unterbrochene Prozess ließ das Dokument unklar; erst nachdem
+die von der Bedienperson angegebenen Remote-Datei und der Beleg die Verknüpfung
+bestätigt hatten und die heruntergeladenen Bytes dem Hash der vorbereiteten Datei
+entsprachen, wurde das Dokument als gesendet gespeichert. Eine nicht passende
+Remote-Datei und eine wiederholte Abstimmung schlugen fehl, ohne erneut zu senden
+oder das Postfach zu verändern.
 
-## Install and connect
+Python 3.12+; Windows- und Linux-Anwendungsprüfungen laufen in CI. Der separate
+geschützte Entwickler-Launcher unterstützt derzeit nur Linux.
 
-From this checkout, install with `uv tool install .`, then run `belegdock --help`.
-Keep account setup files and document data outside the repository.
+## Installieren und verbinden
 
-1. Create a Google Cloud test project, enable Gmail API, and configure OAuth as
-   External / Testing with your Gmail account listed as a test user. Create a
-   Desktop app client and download its JSON outside this checkout.
-2. Run `belegdock login-gmail --client /path/to/client.json` and approve the
-   browser request. The only requested Gmail scope is `gmail.readonly`.
-3. Create a [Lexware trial account](https://app.lexware.de/signup/app/trial) and
-   generate a key in its [Public API settings](https://app.lexware.de/addons/public-api).
-   Run `belegdock login-lexware` and enter it at the hidden prompt. Saving a key
-   does not verify that Lexware accepts it.
+Aus diesem Checkout mit `uv tool install .` installieren und anschließend
+`belegdock --help` ausführen. Konto-Einrichtungsdateien und Dokumentdaten bleiben
+außerhalb des Repositorys.
 
-Credentials use Windows Credential Manager or Linux Secret Service. An unavailable
-store is an error; there is no plaintext fallback. Google OAuth client JSON is
-setup material; refresh/access tokens are stored only in the OS credential store.
-See [Google's setup guide](https://developers.google.com/workspace/gmail/api/quickstart/python)
-and [Lexware's API guide](https://developers.lexware.io/cookbooks/public-api/).
+1. Ein Google-Cloud-Testprojekt erstellen, die Gmail API aktivieren und OAuth als
+   External / Testing konfigurieren; das Gmail-Konto als Testnutzer eintragen. Eine
+   Desktop-App-Client-ID erstellen und deren JSON außerhalb dieses Checkouts speichern.
+2. `belegdock login-gmail --client /path/to/client.json` ausführen und die
+   Browser-Anfrage bestätigen. Der einzige angeforderte Gmail-Bereich ist
+   `gmail.readonly`.
+3. Ein [Lexware-Testkonto](https://app.lexware.de/signup/app/trial) erstellen und
+   in den [Einstellungen der Public API](https://app.lexware.de/addons/public-api)
+   einen Schlüssel erzeugen. `belegdock login-lexware` ausführen und ihn an der
+   verdeckten Eingabe eingeben. Das Speichern eines Schlüssels bestätigt nicht,
+   dass Lexware ihn akzeptiert.
 
-## Select and transfer
+Anmeldedaten werden unter Windows im Credential Manager und unter Linux im Secret
+Service gespeichert.
+Ein nicht verfügbarer Speicher ist ein Fehler; es gibt keinen stillen Fallback auf
+Klartext. Die Google-OAuth-Client-JSON ist Einrichtungsmaterial; Aktualisierungs-
+und Zugriffstoken werden nur im Anmeldedatenspeicher des Betriebssystems abgelegt.
+Siehe [Googles Einrichtungsanleitung](https://developers.google.com/workspace/gmail/api/quickstart/python)
+und [Lexwares API-Anleitung](https://developers.lexware.io/cookbooks/public-api/).
 
-Use a dedicated label containing synthetic documents for the first experiment.
-Commands produce JSON; copy a candidate ID from `scan`, then a hash from `stage`:
+## Auswählen und übertragen
+
+Für das erste Experiment ein eigenes Label mit synthetischen Dokumenten verwenden.
+Die Befehle erzeugen JSON; eine Kandidaten-ID aus `scan` und anschließend einen
+Hash aus `stage` übernehmen:
 
 ```sh
 belegdock scan --label "Rechnungen"
@@ -55,67 +65,81 @@ belegdock refresh
 belegdock upload SHA256_HASH
 ```
 
-For a local desktop view of the same workflow, run `belegdock desktop`. Choose a
-Gmail label, select attachments by filename and size, and choose Prepare selected
-documents. Preparing saves selected files locally and sends nothing to Lexware.
-Review and send displays one compact row per staged document; selecting a row
-shows the full Lexware file and voucher IDs with copy actions. Sending one staged
-document requires a confirmation. The desktop surface performs only user-triggered, single-flight
-operations; it does not poll, retry, or offer uncertain-upload reconciliation.
-If a document is `uploading` or `uncertain`, use the CLI recovery guidance above.
-Python must be installed with Tk support; the command reports a clear error when
-that optional desktop dependency is unavailable.
+Für die lokale Desktop-Ansicht desselben Ablaufs `belegdock desktop` ausführen.
+Ein Gmail-Label auswählen, Anhänge nach Dateiname und Größe markieren und
+„Ausgewählte Dokumente vorbereiten“ wählen. Das Vorbereiten speichert die
+ausgewählten Dateien lokal und sendet nichts an Lexware. „Dokumente prüfen“ zeigt
+eine kompakte Zeile pro vorbereitetem Dokument; die Auswahl einer Zeile zeigt die
+vollständigen Lexware-Datei- und Beleg-IDs mit Kopieraktionen. Das Senden eines
+vorbereiteten Dokuments erfordert eine Bestätigung. Die Desktop-Oberfläche führt
+nur von der Bedienperson ausgelöste Vorgänge einzeln aus; sie fragt nicht im
+Hintergrund ab, wiederholt nichts automatisch und bietet keine Abstimmung unklarer
+Sendeergebnisse an. Wenn ein Dokument `uploading` oder `uncertain` ist, die
+CLI-Wiederherstellungsanleitung unten verwenden. Python muss mit Tk-Unterstützung
+installiert sein; bei fehlender optionaler Desktop-Abhängigkeit wird ein klarer
+Fehler ausgegeben.
 
-Repeat `--select` for more attachments. Scanning does not upload; Gmail message responses may include inline attachment
-bytes, but only explicitly selected attachments are staged. PDF/XML filenames identify candidates, not
-verified invoices. The conservative size limit is 5,000,000 bytes per attachment.
-Duplicate bytes share a blob while each source occurrence is retained.
+`--select` für weitere Anhänge wiederholen. Das Scannen sendet nichts; Gmail-
+Nachrichtenantworten können Inline-Anhangsdaten enthalten, aber nur ausdrücklich
+ausgewählte Anhänge werden vorbereitet. PDF/XML-Dateinamen kennzeichnen
+Kandidaten, sind aber keine geprüften Rechnungen. Die konservative Größenbegrenzung
+beträgt 5.000.000 Bytes pro Anhang. Bytegleiche Duplikate teilen sich einen Blob,
+während jedes Quellvorkommen erhalten bleibt.
 
-`refresh` reads the Lexware profile and both archived states of the paginated
-voucher inventory, then verifies each voucher's file links and hashes current
-file bytes. The cache is replaced only after a complete refresh; unchanged
-file metadata is reused. `upload` always refreshes and verifies a positive
-file/voucher match before sending a POST. Network GETs make at most five
-attempts for HTTP 429 responses, and remote files are streamed
-with a 5,000,000-byte limit.
+`refresh` liest das Lexware-Profil und beide Archivzustände der paginierten
+Beleginventur und prüft anschließend die Dateiverknüpfungen und Hashes der aktuellen
+Dateibytes jedes Belegs. Der Cache wird erst nach einer vollständigen Aktualisierung
+ersetzt; unveränderte Dateimetadaten werden wiederverwendet. `upload` aktualisiert
+immer und prüft vor dem Senden eines POST eine positive Datei-/Belegübereinstimmung.
+Netzwerk-GETs werden bei HTTP-429-Antworten höchstens fünfmal versucht; Remote-
+Dateien werden mit einer Grenze von 5.000.000 Bytes gestreamt.
 
-Data defaults to the OS application-data directory (`BelegDock`), with
-`state.sqlite3` and `blobs/`. Override it before the command, for example
-`belegdock --data-dir /path/to/test-data documents`. Keep the entire directory for
-recovery; back it up while no command is running. No files are automatically deleted.
-After upgrading an existing state directory, run `documents` once before starting
-concurrent BelegDock commands. The local schema upgrade may refuse a concurrent
-first start and makes no remote request.
+Daten liegen standardmäßig im Anwendungsdatenverzeichnis des Betriebssystems
+(`BelegDock`) mit `state.sqlite3` und `blobs/`. Vor dem Befehl überschreiben, zum
+Beispiel mit `belegdock --data-dir /path/to/test-data documents`. Das gesamte
+Verzeichnis für die Wiederherstellung aufbewahren und sichern, solange kein Befehl
+läuft. Es werden keine Dateien automatisch gelöscht. Nach dem Upgrade eines
+vorhandenen Zustands einmal `documents` ausführen, bevor parallele BelegDock-Befehle
+gestartet werden. Das lokale Schema-Upgrade kann einen parallelen ersten Start
+ablehnen und stellt keine Remote-Anfrage.
 
-BelegDock initializes a missing or empty data directory. If a directory already
-contains staging artifacts but `state.sqlite3` is missing or empty, it refuses to
-initialize it so a partial restore cannot hide local state. `documents` checks each
-stored blob and reports `localIntegrity` as `ok`, `missing`, `corrupt`, or
-`unreadable`; a damaged result returns a failure status with restore guidance.
+BelegDock initialisiert ein fehlendes oder leeres Datenverzeichnis. Wenn ein
+Verzeichnis bereits Vorbereitungsartefakte enthält, aber `state.sqlite3` fehlt oder
+leer ist, wird die Initialisierung abgelehnt, damit eine unvollständige
+Wiederherstellung keinen lokalen Zustand verdeckt. `documents` prüft jeden
+gespeicherten Blob und meldet `localIntegrity` als `ok`, `missing`, `corrupt` oder
+`unreadable`; ein beschädigtes Ergebnis führt zu einem Fehlerstatus mit Hinweis zur
+Wiederherstellung.
 
-A confirmed uploaded hash is not resent. A documented Lexware rejection (HTTP
-400 or 406) is recorded as `rejected`; correct the document and stage its new
-bytes. `uploading` and `uncertain` block another upload.
+Ein bestätigter Upload-Hash wird nicht erneut gesendet. Eine dokumentierte
+Lexware-Ablehnung (HTTP 400 oder 406) wird als `rejected` gespeichert; das Dokument
+korrigieren und seine neuen Bytes vorbereiten. `uploading` und `uncertain` blockieren
+einen weiteren Upload.
 
-If a process ended during an upload, run `belegdock recover-upload SHA256_HASH`.
-It changes only a local `uploading` record whose per-document operating-system
-lock is no longer held to `uncertain`; it first verifies staged bytes, and damaged
-or unavailable bytes leave the record `uploading` with restore guidance. It does
-not send a request or allow a retry.
-Inspect Lexware first. When you have the matching document, run:
+Wenn ein Prozess während des Sendens beendet wurde, `belegdock recover-upload SHA256_HASH`
+ausführen. Der Befehl ändert nur einen lokalen Datensatz mit `uploading`, dessen
+prozessbezogene Betriebssystem-Sperre nicht mehr gehalten wird, zu `uncertain`.
+Zuvor werden die vorbereiteten Bytes geprüft; beschädigte oder nicht verfügbare Bytes
+lassen den Status `uploading` bestehen und geben Hinweise zur Wiederherstellung aus.
+Der Befehl sendet nichts und erlaubt keinen erneuten Upload.
+
+Zuerst Lexware prüfen. Wenn das passende Dokument gefunden wurde, ausführen:
 
 ```sh
 belegdock reconcile SHA256_HASH --file-id FILE_ID --voucher-id VOUCHER_ID
 ```
 
-This downloads the remote file and voucher, requires the voucher to reference
-the file, and records the IDs only when the downloaded bytes match the staged
-hash. A failed reconciliation leaves the document `uncertain`. Do not reset the
-state or delete staging to force a retry; retry after an uncertain upload remains
-deferred because this narrow flow cannot prove remote absence.
+Der Befehl lädt die Remote-Datei und den Beleg herunter, verlangt, dass der Beleg
+auf die Datei verweist, und speichert die IDs nur, wenn die heruntergeladenen Bytes
+dem Hash der vorbereiteten Datei entsprechen. Eine fehlgeschlagene Abstimmung lässt
+das Dokument `uncertain`. Den Zustand nicht zurücksetzen und die Vorbereitung nicht
+löschen, um einen erneuten Versuch zu erzwingen; ein erneuter Versuch nach einem
+unklaren Ergebnis bleibt zurückgestellt, weil dieser begrenzte Ablauf das Fehlen
+auf der Remote-Seite nicht beweisen kann.
 
-For the user-run Windows package check, copy the current
-`dist/belegdock-0.1.0.dev0-py3-none-any.whl` to Windows, then use PowerShell:
+Für die vom Benutzer auszuführende Windows-Paketprüfung das aktuelle
+`dist/belegdock-0.1.0.dev0-py3-none-any.whl` nach Windows kopieren und PowerShell
+verwenden:
 
 ```powershell
 $wheel = "$env:USERPROFILE\Downloads\belegdock-0.1.0.dev0-py3-none-any.whl"
@@ -127,18 +151,19 @@ py -3.12 -m venv $environment
 & "$environment\Scripts\belegdock.exe" --data-dir $data documents
 ```
 
-Then follow the connection, selection, and recovery instructions above for an
-account test. Do not transfer credentials or local state through Git. The package
-check above does not itself test Gmail or Lexware connectivity; a separate user-run
-Windows test of the installed package passed with Windows Credential Manager, live
-Gmail scan/staging, and Lexware upload and rejection handling.
+Danach die obigen Anweisungen zur Verbindung, Auswahl und Wiederherstellung für
+einen Kontotest befolgen. Anmeldedaten oder lokalen Zustand nicht über Git übertragen.
+Die Paketprüfung selbst testet weder Gmail- noch Lexware-Konnektivität; ein separater
+Windows-Test des installierten Pakets bestand mit Windows Credential Manager, dem
+Live-Scannen und Vorbereiten in Gmail sowie dem Senden und der Ablehnungsbehandlung
+in Lexware.
 
-## Development
+## Entwicklung
 
-- [AGENTS.md](AGENTS.md): workflow, immutable tests, development commands and isolation.
-- [Architecture](docs/arc42.md): scope, decisions, limits and remaining work.
-- [Feature form](https://github.com/NotPellew/BelegDock/issues/new?template=feature.yml):
-  refine work in an issue; keep delivery evidence in its PR.
+- [AGENTS.md](AGENTS.md): Arbeitsablauf, unveränderliche Tests, Entwicklungsbefehle und Isolation.
+- [Architektur](docs/arc42.md): Geltungsbereich, Entscheidungen, Grenzen und offene Arbeit.
+- [Feature-Formular](https://github.com/NotPellew/BelegDock/issues/new?template=feature.yml):
+  Arbeit in einem Issue präzisieren; die Liefernachweise bleiben im zugehörigen PR.
 
-Public Gmail onboarding, scheduling, and document archiving remain deferred.
-Licensed under the Apache License, Version 2.0; see [LICENSE](LICENSE).
+Öffentliches Gmail-Onboarding, Zeitplanung und Dokumentarchivierung bleiben zurückgestellt.
+Lizenziert unter der Apache License 2.0; siehe [LICENSE](LICENSE).

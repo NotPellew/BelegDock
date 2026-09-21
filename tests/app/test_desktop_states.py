@@ -97,7 +97,7 @@ class DesktopStateTests(unittest.TestCase):
         app._upload()
 
         self.assertIn("CLI", app.notice.value)
-        self.assertIn("reconcil", app.notice.value.lower())
+        self.assertIn("abstimmung", app.notice.value.lower())
         app.service.upload.assert_not_called()
         app.messagebox.askyesno.assert_not_called()
 
@@ -127,9 +127,9 @@ class DesktopStateTests(unittest.TestCase):
 
         app._upload()
 
-        self.assertIn("correct the document", app.notice.value.lower())
-        self.assertIn("stage new bytes", app.notice.value.lower())
-        self.assertNotIn("uncertain", app.notice.value.lower())
+        self.assertIn("korrigiere das dokument", app.notice.value.lower())
+        self.assertIn("neuen bytes", app.notice.value.lower())
+        self.assertNotIn("unklar", app.notice.value.lower())
 
 
 class FakeDocumentView:

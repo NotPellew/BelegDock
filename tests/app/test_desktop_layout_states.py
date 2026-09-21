@@ -45,15 +45,15 @@ class DesktopLayoutAndActionStateTests(unittest.TestCase):
             return
         self.assertEqual(
             desktop.document_action_state("staged", "ok"),
-            (True, "Ready to send.", ""),
+            (True, "Bereit zum Senden.", ""),
         )
         self.assertEqual(
             desktop.document_action_state("uploaded", "ok"),
-            (False, "Uploaded", "This document was already sent to Lexware."),
+            (False, "Gesendet", "Dieses Dokument wurde bereits an Lexware gesendet."),
         )
         self.assertEqual(
             desktop.document_action_state("uploaded", "ok", "already_present"),
-            (False, "Already present in Lexware", "No upload needed."),
+            (False, "Bereits in Lexware vorhanden", "Kein Senden erforderlich."),
         )
         self.assertEqual(
             desktop.document_action_state("rejected", "ok")[0],
@@ -61,7 +61,11 @@ class DesktopLayoutAndActionStateTests(unittest.TestCase):
         )
         self.assertEqual(
             desktop.document_action_state("uncertain", "ok"),
-            (False, "Uncertain", "Outcome is uncertain; use the CLI recovery and reconciliation commands."),
+            (
+                False,
+                "Unklar",
+                "Ergebnis unklar; verwende die CLI-Befehle zur Wiederherstellung und Abstimmung.",
+            ),
         )
         self.assertEqual(desktop.document_action_state("staged", "corrupt")[0], False)
 
@@ -79,7 +83,7 @@ class DesktopLayoutAndActionStateTests(unittest.TestCase):
         app._show_document_detail()
 
         self.assertIsNone(app._detail_row)
-        app.action_status.set.assert_called_once_with("Select a document to review.")
+        app.action_status.set.assert_called_once_with("Wähle ein Dokument zur Prüfung.")
         app.action_guidance.set.assert_called_once_with("")
         app.upload_button.state.assert_called_once_with(["disabled"])
 

@@ -16,7 +16,7 @@ class CliHelpQuickStartTests(unittest.TestCase):
         status, output = self.help_text()
 
         self.assertEqual(status, 0)
-        self.assertIn("quick start:", output)
+        self.assertIn("Schnellstart:", output)
         for line in (
             "belegdock login-gmail --client CLIENT_JSON",
             "belegdock login-lexware",
@@ -32,7 +32,7 @@ class CliHelpQuickStartTests(unittest.TestCase):
         status, output = self.help_text()
 
         self.assertEqual(status, 0)
-        self.assertIn("recovery after an interrupted upload:", output)
+        self.assertIn("Wiederherstellung nach einem unterbrochenen Sendevorgang:", output)
         self.assertIn("belegdock recover-upload SHA256_HASH", output)
         self.assertIn(
             "belegdock reconcile SHA256_HASH --file-id FILE_ID --voucher-id VOUCHER_ID",
