@@ -68,7 +68,7 @@ class DesktopDetailResetTests(unittest.TestCase):
         app._load_documents()
 
         self.assertIsNone(app._detail_row)
-        self.assertEqual(app.detail_filename.get(), "Select a document to review.")
+        self.assertEqual(app.detail_filename.get(), "Wähle ein Dokument zur Prüfung.")
         self.assertEqual(app.detail_file_id.get(), "")
         self.assertEqual(app.detail_voucher_id.get(), "")
 
