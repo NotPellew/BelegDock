@@ -73,6 +73,14 @@ def default_data_dir() -> Path:
     return Path(import_module("platformdirs").user_data_dir("BelegDock", appauthor=False))
 
 
+def recover_upload_command(digest: str) -> str:
+    return f"belegdock recover-upload {digest}"
+
+
+def reconcile_command(digest: str) -> str:
+    return f"belegdock reconcile {digest} --file-id FILE_ID --voucher-id VOUCHER_ID"
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="belegdock",
@@ -213,11 +221,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "stage":
             message = "Staging failed; check selection, connection, file size, and local storage."
         elif args.command == "upload":
-            message = "Upload failed; inspect documents. Uncertain outcomes require manual reconciliation before retry."
+            message = (
+                f"Upload outcome is uncertain for {args.hash}; do not retry. If this process stopped before "
+                f"reporting its outcome, run '{recover_upload_command(args.hash)}'. Inspect Lexware, then run "
+                f"'{reconcile_command(args.hash)}'."
+            )
         elif args.command == "recover-upload":
-            message = "Recovery failed; an active upload cannot be recovered. Inspect documents before reconciliation."
+            message = (
+                "Recovery failed; an active upload cannot be recovered. Wait for it to finish. If the "
+                f"process stopped before reporting an outcome, run '{recover_upload_command(args.hash)}'."
+            )
         elif args.command == "reconcile":
-            message = "Reconciliation failed; the document remains uncertain. Do not retry the upload."
+            message = (
+                f"Reconciliation failed for {args.hash}; the document remains uncertain. Do not retry the "
+                f"upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
+            )
         elif args.command.startswith("login"):
             message = "Connection failed; check the native credential store and account/client setup."
         elif args.command == "desktop":
