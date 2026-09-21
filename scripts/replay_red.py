@@ -130,7 +130,7 @@ def replay(repo, output):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Replay the nine frozen feature RED checkpoints, or --verify them without executing pytest")
+        description=f"Replay the {len(GROUPS)} frozen feature RED checkpoints, or --verify them without executing pytest")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--output", type=Path)
