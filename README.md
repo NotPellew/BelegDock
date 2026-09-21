@@ -99,7 +99,9 @@ bytes. `uploading` and `uncertain` block another upload.
 
 If a process ended during an upload, run `belegdock recover-upload SHA256_HASH`.
 It changes only a local `uploading` record whose per-document operating-system
-lock is no longer held to `uncertain`; it does not send a request or allow a retry.
+lock is no longer held to `uncertain`; it first verifies staged bytes, and damaged
+or unavailable bytes leave the record `uploading` with restore guidance. It does
+not send a request or allow a retry.
 Inspect Lexware first. When you have the matching document, run:
 
 ```sh

@@ -265,6 +265,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                         f"Upload outcome could not be checked for {args.hash}; do not retry. Inspect local state "
                         "and Lexware before choosing a recovery command."
                     )
+                elif status == "rejected":
+                    message = "Document was rejected; correct it and stage new bytes."
                 elif status == "uncertain":
                     message = (
                         f"Upload outcome is uncertain for {args.hash}; do not retry. Inspect Lexware, then run "
