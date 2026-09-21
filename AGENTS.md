@@ -22,6 +22,9 @@ evidence. Do not maintain duplicate feature specifications in docs/.
 1. Refine the request: outcome, scope, exclusions, observable acceptance criteria,
    failure behavior, and decisions needed before coding.
 2. Map acceptance criteria to tests and establish a passing existing baseline.
+   For state-dependent recovery or failure guidance, enumerate persisted states
+   and failure boundaries (before an operation begins, during local work, and
+   after a remote call), then map each to allowed operator guidance.
 3. Write each feature test before its corresponding behavior. Execute it against
    the code missing that behavior and observe the intended failure (RED).
 4. Record the test snapshot and evidence before implementation. A test-only
@@ -30,8 +33,10 @@ evidence. Do not maintain duplicate feature specifications in docs/.
    then refactor with tests remaining green.
 6. Review the complete relevant diff against the issue, including failure cases,
    usability, security, and unnecessary complexity.
-7. For behavioral defects, add a reproducing test before repair. Repeat relevant
-   verification. If repairs repeatedly stall, return to refinement.
+7. Treat reviewer findings as hypotheses: reproduce or otherwise verify them
+   against current code, tests, or the governing contract before repair. For
+   confirmed behavioral defects, add a reproducing test before repair. Repeat
+   relevant verification. If repairs repeatedly stall, return to refinement.
 8. Update affected documentation and verify the final package on both platforms.
    Report what passed, what was not run, and unresolved limitations.
 
