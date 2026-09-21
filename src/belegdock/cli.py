@@ -102,8 +102,8 @@ def transfer_active_wait_message(digest: str) -> str:
 
 def recovery_state_unavailable_message(digest: str) -> str:
     return (
-        f"Recovery state could not be checked for {digest}; do not retry the upload. "
-        "Restore or inspect local state before choosing a recovery command."
+        f"Wiederherstellungsstatus für {digest} konnte nicht geprüft werden; den Upload nicht erneut senden. "
+        "Stelle den lokalen Zustand wieder her oder prüfe ihn, bevor du einen Wiederherstellungsbefehl wählst."
     )
 
 
@@ -321,8 +321,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     message = local_integrity_restore_message()
                 elif not status_available:
                     message = (
-                        f"Upload outcome could not be checked for {args.hash}; do not retry. Inspect local state "
-                        "and Lexware before choosing a recovery command."
+                        f"Sendeergebnis für {args.hash} konnte nicht geprüft werden; nicht erneut senden. "
+                        "Prüfe den lokalen Zustand und Lexware, bevor du einen Wiederherstellungsbefehl wählst."
                     )
                 elif status == "rejected":
                     message = "Document was rejected; correct it and stage new bytes."
@@ -333,8 +333,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 elif status == "uncertain":
                     message = (
-                        f"Upload outcome is uncertain for {args.hash}; do not retry. Inspect Lexware, then run "
-                        f"'{reconcile_command(args.hash)}'."
+                        f"Sendeergebnis für {args.hash} ist unklar; nicht erneut senden. Prüfe Lexware und führe "
+                        f"anschließend '{reconcile_command(args.hash)}' aus."
                     )
                 elif status == "uploading":
                     message = (
@@ -354,8 +354,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     message = recovery_state_unavailable_message(args.hash)
                 elif status == "uncertain":
                     message = (
-                        f"Recovery is not needed; the outcome for {args.hash} is already uncertain. Do not retry "
-                        f"the upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
+                        f"Wiederherstellung ist nicht erforderlich; das Ergebnis für {args.hash} ist bereits unklar; "
+                        f"nicht erneut senden. Prüfe Lexware und führe anschließend '{reconcile_command(args.hash)}' aus."
                     )
                 elif status == "uploading":
                     message = (
@@ -375,8 +375,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     message = recovery_state_unavailable_message(args.hash)
                 elif status == "uncertain":
                     message = (
-                        f"Reconciliation failed for {args.hash}; the document remains uncertain. Do not retry the "
-                        f"upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
+                        f"Abstimmung für {args.hash} fehlgeschlagen; das Dokument bleibt unklar; nicht erneut senden. "
+                        f"Prüfe Lexware und führe anschließend '{reconcile_command(args.hash)}' aus."
                     )
                 elif status == "staged":
                     message = (
