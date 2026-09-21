@@ -267,6 +267,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 elif status == "rejected":
                     message = "Document was rejected; correct it and stage new bytes."
+                elif status == "uploaded":
+                    message = (
+                        f"Upload is already recorded for {args.hash}; do not retry. Run 'belegdock documents' "
+                        "to inspect local state."
+                    )
                 elif status == "uncertain":
                     message = (
                         f"Upload outcome is uncertain for {args.hash}; do not retry. Inspect Lexware, then run "
