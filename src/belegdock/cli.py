@@ -14,6 +14,7 @@ from .service import refresh_remote_inventory as _refresh_remote_inventory
 from .workflow import DocumentRejected, LocalIntegrityError, Store
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+LOCAL_INTEGRITY_FAILED = "local_integrity_failed"
 
 QUICK_START = """quick start:
   belegdock login-gmail --client CLIENT_JSON
@@ -88,6 +89,10 @@ def recovery_state_unavailable_message(digest: str) -> str:
     )
 
 
+def local_integrity_restore_message() -> str:
+    return "Local document integrity failed; restore state.sqlite3 and blobs from a consistent backup."
+
+
 def valid_document_hash(digest: str) -> bool:
     try:
         Store._validate_digest(digest)
@@ -101,6 +106,8 @@ def document_status(data_dir: Path, digest: str) -> tuple[str | None, bool]:
         for document in Store(data_dir).list_documents():
             if document.get("hash") == digest:
                 status = document.get("status")
+                if document.get("localIntegrity") != "ok":
+                    return LOCAL_INTEGRITY_FAILED, True
                 return (status if isinstance(status, str) else None), True
     except Exception:
         return None, False
@@ -220,7 +227,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             item.get("localIntegrity") != "ok" for item in result
         ):
             print(
-                "Local document integrity failed; restore state.sqlite3 and blobs from a consistent backup.",
+                local_integrity_restore_message(),
                 file=sys.stderr,
             )
             return 1
@@ -251,7 +258,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
                 status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
-                if not status_available:
+                if status == LOCAL_INTEGRITY_FAILED:
+                    message = local_integrity_restore_message()
+                elif not status_available:
                     message = (
                         f"Upload outcome could not be checked for {args.hash}; do not retry. Inspect local state "
                         "and Lexware before choosing a recovery command."
@@ -273,7 +282,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
                 status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
-                if not status_available:
+                if status == LOCAL_INTEGRITY_FAILED:
+                    message = local_integrity_restore_message()
+                elif not status_available:
                     message = recovery_state_unavailable_message(args.hash)
                 elif status == "uncertain":
                     message = (
@@ -292,7 +303,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
                 status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
-                if not status_available:
+                if status == LOCAL_INTEGRITY_FAILED:
+                    message = local_integrity_restore_message()
+                elif not status_available:
                     message = recovery_state_unavailable_message(args.hash)
                 elif status == "uncertain":
                     message = (
