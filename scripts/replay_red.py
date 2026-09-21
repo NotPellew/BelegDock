@@ -29,6 +29,7 @@ GROUPS = (
     ("recovery_state_guidance", "f80559e", "test_cli_recovery_state_guidance.py", 2, {"AssertionError"}),
     ("recovery_state_unavailable", "2e17ec9", "test_cli_recovery_state_unavailable.py", 2, {"AssertionError"}),
     ("recovery_unavailable_commands", "dc6816a", "test_cli_recovery_unavailable_commands.py", 2, {"AssertionError"}),
+    ("recovery_integrity_guidance", "5e9bd53", "test_cli_recovery_integrity_guidance.py", 2, {"AssertionError"}),
 )
 
 
