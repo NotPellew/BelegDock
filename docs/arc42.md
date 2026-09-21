@@ -17,7 +17,9 @@ preservation, reliable recovery, clear results, and a small maintainable package
 
 ## 2. Constraints
 
-- Windows and Linux from the start; exact supported versions remain to be set.
+- Windows and Linux from the start. The Windows pilot installer supports Windows
+  10 22H2 (10.0.19045) and Windows 11, x64 only; arm64 and older Windows are
+  unsupported. The CLI package itself remains Python 3.12+ on both platforms.
 - One Gmail account and one selected label; PDF/XML candidates; explicit upload.
 - One-shot CLI commands. No scheduling until restart/retry behavior is proven.
 - Python through the complete proof of functionality; reconsider afterward only
@@ -84,6 +86,17 @@ Verify installation and the built CLI on Windows and Linux. User data, credentia
 and host-specific development permissions are separate from repository contents.
 The package targets Python 3.12+; CI checks Python 3.12/3.14 on Ubuntu and Windows.
 
+The Windows pilot also ships as a frozen PyInstaller onedir bundle inside a
+per-user Inno Setup installer (`PrivilegesRequired=lowest`) built from the built
+wheel. The installer adds the install directory to the per-user PATH and creates a
+Start Menu shortcut; uninstalling removes both without touching
+`%LOCALAPPDATA%\BelegDock`. The build runs only on Windows from a neutral work
+root (`C:\belegdock-build`), and `pyinstaller` is pinned in
+`packaging/build_windows.py` so `pyproject.toml` and `uv.lock` stay untouched. CI
+retains the setup executable and `artifact.json` (sha256, size, wheel hash, tool
+versions, git revision) as a 90-day workflow artifact; there is no GitHub Release
+and no code signing. The real window launch stays a manual native Windows check.
+
 Developer isolation currently requires Linux and Bubblewrap; native Windows
 fails explicitly. This limitation does not change the application's platform
 targets. System runtimes and the checkout are exposed; the normal home directory
@@ -129,6 +142,7 @@ and host sockets are not. The session gets a temporary home and /tmp.
 | GitHub issues and PRs | One feature specification and linked delivery evidence | Hosting requirements change |
 | Protected tests and RED/GREEN records | Prevent silent test changes; requires host enforcement and CI | Verification exposes a gap |
 | Bubblewrap for the initial Linux boundary | Small launcher using OS mounts; no new service | Windows implementation or runtime compatibility requires another backend |
+| PyInstaller onedir plus per-user Inno Setup for the Windows pilot | Installs without admin or a source checkout; install path stays independent from user data | Runner/toolchain drift or a signing requirement appears |
 
 ## 10. Quality requirements
 
@@ -196,8 +210,16 @@ and host sockets are not. The session gets a temporary home and /tmp.
   API/key usage terms for this application, including whether users may generate
   and store their own key in a local open-source client that never receives it
   (Apache-2.0 is selected).
-- Define exact supported OS versions, cleanup policy,
-  and backup/restore behavior before making related user-facing promises.
+- The Windows pilot installer is unsigned (SmartScreen warning) and ships no
+  custom application icon. PyInstaller may embed build-machine source paths, so the
+  build uses the neutral work root `C:\belegdock-build` and the artifact check
+  scans for user-profile patterns; that reduces but does not prove the absence of
+  embedded paths. Per-user PATH editing is the most fragile installer step and is
+  asserted during the smoke installation. arm64 and Windows versions before
+  10 22H2 are unsupported. PyInstaller support for the CI Python versions
+  (3.12/3.14) must be rechecked when the pinned version or the toolchain changes.
+- The cleanup policy and the backup/restore behavior still need a user-facing
+  decision; the supported Windows versions are now fixed for the pilot installer.
 
 ## 12. Glossary
 

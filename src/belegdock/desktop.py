@@ -1,8 +1,9 @@
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 import gettext
 from pathlib import Path
 from pathlib import PurePath
+import sys
 from threading import Lock
 from typing import Any
 
@@ -732,3 +733,37 @@ def run_desktop(data_dir: Path | None) -> None:
         application.run()
     finally:
         application.service.close()
+
+
+DESKTOP_UNAVAILABLE_MESSAGE = _(
+    "Desktop-Oberfläche ist nicht verfügbar; installiere Python-Tk-Unterstützung "
+    "und starte „belegdock desktop“ erneut."
+)
+DESKTOP_START_FAILED_MESSAGE = _(
+    "BelegDock konnte nicht gestartet werden. Melde dich zuerst mit "
+    "„belegdock login-gmail“ und „belegdock login-lexware“ an und starte die "
+    "Anwendung erneut."
+)
+
+
+def _report_failure(message: str) -> None:
+    if sys.platform == "win32":
+        import ctypes
+
+        windll = getattr(ctypes, "windll")
+        windll.user32.MessageBoxW(None, message, _("BelegDock"), 0x10)
+        return
+    print(message, file=sys.stderr)
+
+
+def desktop_main(report: Callable[[str], None] | None = None) -> int:
+    reporter = report if report is not None else _report_failure
+    try:
+        run_desktop(None)
+    except DesktopUnavailableError:
+        reporter(DESKTOP_UNAVAILABLE_MESSAGE)
+        return 1
+    except Exception:
+        reporter(DESKTOP_START_FAILED_MESSAGE)
+        return 1
+    return 0
