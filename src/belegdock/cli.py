@@ -103,7 +103,7 @@ def valid_document_hash(digest: str) -> bool:
 
 def document_status(data_dir: Path, digest: str) -> tuple[str | None, bool]:
     try:
-        for document in Store(data_dir).list_documents():
+        for document in Store(data_dir).list_documents(digest):
             if document.get("hash") == digest:
                 status = document.get("status")
                 if document.get("localIntegrity") != "ok":

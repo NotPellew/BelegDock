@@ -154,12 +154,19 @@ class Store:
             connection.commit()
         return digest
 
-    def list_documents(self) -> list[dict[str, Any]]:
+    def list_documents(self, digest: str | None = None) -> list[dict[str, Any]]:
+        query = (
+            "SELECT hash, filename, size, status, id, voucher_id, rejection_status, origin "
+            "FROM documents"
+        )
+        parameters: tuple[str, ...] = ()
+        if digest is not None:
+            self._validate_digest(digest)
+            query += " WHERE hash=?"
+            parameters = (digest,)
+        query += " ORDER BY hash"
         with self._connection() as connection:
-            rows = connection.execute(
-                "SELECT hash, filename, size, status, id, voucher_id, rejection_status, origin "
-                "FROM documents ORDER BY hash"
-            ).fetchall()
+            rows = connection.execute(query, parameters).fetchall()
         return [
             {
                 "hash": row[0],
