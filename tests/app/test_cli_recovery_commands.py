@@ -93,7 +93,7 @@ class RecoveryCommandCliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertFalse(worker.is_alive())
-        self.assertIn("active upload", error)
+        self.assertIn("aktives Senden", error)
         self.assertIn(f"belegdock recover-upload {digest}", error)
 
 

@@ -56,7 +56,7 @@ class WorkflowCliTests(unittest.TestCase):
         with patch.object(cli, "gmail_client", return_value=("test-account", self.gmail)):
             status, output, error = self.invoke("stage", "--label", "Test", "--select", "m:1", "--select", "missing")
         self.assertNotEqual(status, 0)
-        self.assertIn("selection", error.lower())
+        self.assertIn("auswahl", error.lower())
         self.gmail.fetch.assert_not_called()
 
     def test_documents_lists_local_state_without_connection(self):
@@ -71,4 +71,4 @@ class WorkflowCliTests(unittest.TestCase):
             status, output, error = self.invoke("scan", "--label", "Test")
         self.assertNotEqual(status, 0)
         self.assertNotIn("private-document-content", output + error)
-        self.assertIn("failed", error.lower())
+        self.assertIn("fehlgeschlagen", error.lower())

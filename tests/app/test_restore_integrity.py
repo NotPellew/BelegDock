@@ -66,7 +66,7 @@ def test_cli_missing_database_reports_restore_guidance_without_empty_success(tmp
     status, output, error = invoke(tmp_path, "documents")
     assert status != 0
     assert not output.strip()
-    assert "restore" in error.lower()
+    assert "wiederher" in error.lower()
     assert not (tmp_path / "state.sqlite3").exists()
 
 
@@ -103,7 +103,7 @@ def test_uploaded_missing_or_corrupt_blob_is_flagged_without_rewriting_status(tm
     status, output, error = invoke(tmp_path, "documents")
     assert status != 0
     assert json.loads(output)[0]["localIntegrity"] == damage
-    assert "restore" in error.lower()
+    assert "wiederher" in error.lower()
     assert "private corrupt contents" not in output + error
 
 

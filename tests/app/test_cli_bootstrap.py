@@ -17,7 +17,7 @@ class CliBootstrapTests(unittest.TestCase):
 
         self.assertEqual(status, 0)
         self.assertIn("BelegDock", output)
-        self.assertIn("early-stage", output)
+        self.assertIn("frühen Entwicklungsphase", output)
 
     def test_version_reports_the_package_version(self):
         status, output = self.run_cli("--version")

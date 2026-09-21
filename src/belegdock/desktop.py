@@ -13,14 +13,15 @@ from .workflow import DocumentRejected, Store
 _ = gettext.gettext
 
 PREPARE_HELPER = _(
-    "This saves selected files locally and sends nothing to Lexware."
+    "Ausgewählte Dateien werden lokal gespeichert und nicht an Lexware gesendet."
 )
 DOCUMENT_TABLE_COLUMNS = ("filename", "size", "status")
 DESKTOP_LAYOUT_BREAKPOINT = 1050
 INITIAL_WINDOW_GEOMETRY = "1488x1060"
 MIN_WINDOW_SIZE = (760, 720)
 LOCAL_RESTORE_GUIDANCE = _(
-    "Local document integrity failed; restore state.sqlite3 and blobs from a consistent backup."
+    "Die Integrität lokaler Dokumente ist fehlgeschlagen; stelle state.sqlite3 und blobs "
+    "aus einer konsistenten Sicherung wieder her."
 )
 
 
@@ -28,8 +29,8 @@ def format_size(value: Any) -> str:
     try:
         size = max(0, int(value))
     except (TypeError, ValueError):
-        return _("Unknown size")
-    units = (_("bytes"), _("KiB"), _("MiB"), _("GiB"), _("TiB"))
+        return _("Unbekannte Größe")
+    units = (_("Bytes"), _("KiB"), _("MiB"), _("GiB"), _("TiB"))
     if size < 1024:
         return _("%(size)d %(unit)s") % {"size": size, "unit": units[0]}
     amount = float(size)
@@ -37,21 +38,24 @@ def format_size(value: Any) -> str:
     while amount >= 1024 and unit < len(units) - 1:
         amount /= 1024
         unit += 1
-    return _("%(size).1f %(unit)s") % {"size": amount, "unit": units[unit]}
+    return _("%(size)s %(unit)s") % {
+        "size": f"{amount:.1f}".replace(".", ","),
+        "unit": units[unit],
+    }
 
 
 _STATUS_LABELS = {
-    "staged": _("Staged"),
-    "uploaded": _("Uploaded"),
-    "already_present": _("Already present in Lexware"),
-    "uncertain": _("Uncertain"),
-    "uploading": _("Uploading"),
-    "rejected": _("Rejected"),
+    "staged": _("Vorbereitet"),
+    "uploaded": _("Gesendet"),
+    "already_present": _("Bereits in Lexware vorhanden"),
+    "uncertain": _("Unklar"),
+    "uploading": _("Wird gesendet"),
+    "rejected": _("Abgelehnt"),
 }
 
 
 def status_label(status_code: str) -> str:
-    return _STATUS_LABELS.get(status_code, _("Unknown"))
+    return _STATUS_LABELS.get(status_code, _("Unbekannt"))
 
 
 class DesktopUnavailableError(RuntimeError):
@@ -82,7 +86,7 @@ class DesktopService:
             selected = set(selected_ids)
             known = {candidate["id"] for candidate in candidates}
             if not selected or not selected.issubset(known):
-                raise ValueError("select one or more displayed documents")
+                raise ValueError("Wähle mindestens ein angezeigtes Dokument aus")
             return [
                 self.store.stage(
                     self.account,
@@ -127,39 +131,45 @@ class DesktopService:
 def _safe_error(operation: str, error: Exception) -> str:
     del error
     return {
-        "labels": _("Could not load Gmail labels; check the account connection."),
-        "candidates": _("Could not load attachments; check the label and account connection."),
-        "stage": _("Staging failed; check the selection, connection, and local storage."),
-        "documents": _("Could not load Documents; check local storage."),
-        "upload": _("Upload failed; inspect Documents. Uncertain outcomes require CLI recovery."),
-        "rejected": _("Lexware rejected the document; correct the document and stage new bytes."),
-    }.get(operation, _("Operation failed; check the account connection and local storage."))
+        "labels": _("Gmail-Labels konnten nicht geladen werden; prüfe die Kontoverbindung."),
+        "candidates": _("Anhänge konnten nicht geladen werden; prüfe Label und Kontoverbindung."),
+        "stage": _("Vorbereiten fehlgeschlagen; prüfe Auswahl, Verbindung und lokalen Speicher."),
+        "documents": _("Dokumente konnten nicht geladen werden; prüfe den lokalen Speicher."),
+        "upload": _(
+            "Senden fehlgeschlagen; prüfe Dokumente. Bei unklarem Ergebnis ist die "
+            "CLI-Wiederherstellung erforderlich."
+        ),
+        "rejected": _(
+            "Lexware hat das Dokument abgelehnt; korrigiere das Dokument und bereite die "
+            "neuen Bytes vor."
+        ),
+    }.get(operation, _("Vorgang fehlgeschlagen; prüfe Kontoverbindung und lokalen Speicher."))
 
 
 def document_action_state(
     status_code: str, integrity: str | None, origin: str | None = None
 ) -> tuple[bool, str, str]:
     if integrity != "ok":
-        return False, _("Restore required"), LOCAL_RESTORE_GUIDANCE
+        return False, _("Wiederherstellung erforderlich"), LOCAL_RESTORE_GUIDANCE
     if origin == "already_present":
-        return False, _("Already present in Lexware"), _("No upload needed.")
+        return False, _("Bereits in Lexware vorhanden"), _("Kein Senden erforderlich.")
     if status_code == "uploaded":
-        return False, status_label(status_code), _("This document was already sent to Lexware.")
+        return False, status_label(status_code), _("Dieses Dokument wurde bereits an Lexware gesendet.")
     if status_code == "rejected":
         return False, status_label(status_code), _safe_error("rejected", RuntimeError())
     if status_code in {"uncertain", "uploading"}:
         return False, status_label(status_code), _(
-            "Outcome is uncertain; use the CLI recovery and reconciliation commands."
+            "Ergebnis unklar; verwende die CLI-Befehle zur Wiederherstellung und Abstimmung."
         )
     if status_code == "staged":
-        return True, _("Ready to send."), ""
-    return False, status_label(status_code), _("Only staged documents can be sent.")
+        return True, _("Bereit zum Senden."), ""
+    return False, status_label(status_code), _("Nur vorbereitete Dokumente können gesendet werden.")
 
 
 def _safe_filename(value: Any) -> str:
     name = PurePath(str(value).replace("\\", "/")).name
     cleaned = "".join(character if character.isprintable() else "_" for character in name)
-    return cleaned[:120] or _("(unnamed document)")
+    return cleaned[:120] or _("(Dokument ohne Namen)")
 
 
 class DesktopApplication:
@@ -171,7 +181,7 @@ class DesktopApplication:
         self.root = tk.Tk()
         self.root.title(_("BelegDock"))
         self.label = tk.StringVar()
-        self.notice = tk.StringVar(value=_("Select a Gmail label."))
+        self.notice = tk.StringVar(value=_("Wähle ein Gmail-Label."))
         self._candidate_ids: dict[str, str] = {}
         self._document_hashes: dict[str, str] = {}
         self._document_status: dict[str, str] = {}
@@ -207,9 +217,9 @@ class DesktopApplication:
         self.review_section = self.ttk.Frame(self.sections, style="Main.TFrame")
 
         self.ttk.Label(
-            self.choose_section, text=_("Choose documents"), style="SectionTitle.TLabel"
+            self.choose_section, text=_("Dokumente auswählen"), style="SectionTitle.TLabel"
         ).grid(row=0, column=0, columnspan=3, sticky="w")
-        self.ttk.Label(self.choose_section, text=_("Gmail label"), style="Field.TLabel").grid(
+        self.ttk.Label(self.choose_section, text=_("Gmail-Label"), style="Field.TLabel").grid(
             row=1, column=0, columnspan=3, sticky="w", pady=(20, 4)
         )
         self.label_box = self.ttk.Combobox(
@@ -225,13 +235,13 @@ class DesktopApplication:
             self.choose_section,
             row=3,
             columns=("filename", "size"),
-            headings={"filename": _("Filename"), "size": _("Size")},
+            headings={"filename": _("Dateiname"), "size": _("Größe")},
             selectmode="extended",
         )
         self.candidates_view.bind("<Return>", lambda _event: self._stage())
         self.stage_button = self.ttk.Button(
             self.choose_section,
-            text=_("Prepare selected documents"),
+            text=_("Ausgewählte Dokumente vorbereiten"),
             command=self._stage,
             style="Primary.TButton",
         )
@@ -242,18 +252,18 @@ class DesktopApplication:
         self.choose_section.columnconfigure(0, weight=1, minsize=280)
 
         self.ttk.Label(
-            self.review_section, text=_("Review documents"), style="SectionTitle.TLabel"
+            self.review_section, text=_("Dokumente prüfen"), style="SectionTitle.TLabel"
         ).grid(row=0, column=0, columnspan=3, sticky="w")
         self.ttk.Label(
-            self.review_section, text=_("Prepared documents"), style="SubsectionTitle.TLabel"
+            self.review_section, text=_("Vorbereitete Dokumente"), style="SubsectionTitle.TLabel"
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(20, 0))
         self.documents_view = self._build_tree(
             self.review_section,
             row=2,
             columns=DOCUMENT_TABLE_COLUMNS,
             headings={
-                "filename": _("Filename"),
-                "size": _("Size"),
+                "filename": _("Dateiname"),
+                "size": _("Größe"),
                 "status": _("Status"),
             },
             selectmode="browse",
@@ -269,28 +279,28 @@ class DesktopApplication:
         )
         self.ttk.Label(
             self.review_section,
-            text=_("Selected document details"),
+            text=_("Details des ausgewählten Dokuments"),
             style="SubsectionTitle.TLabel",
         ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(0, 8))
         detail = self.ttk.Frame(self.review_section, style="Main.TFrame")
         detail.grid(row=5, column=0, columnspan=3, sticky="ew")
-        self.detail_filename = self.tk.StringVar(value=_("Select a document to review."))
+        self.detail_filename = self.tk.StringVar(value=_("Wähle ein Dokument zur Prüfung."))
         self.detail_status = self.tk.StringVar()
         self.detail_file_id = self.tk.StringVar()
         self.detail_voucher_id = self.tk.StringVar()
         self._detail_row: str | None = None
-        self._detail_field(detail, 0, _("Filename"), self.detail_filename)
+        self._detail_field(detail, 0, _("Dateiname"), self.detail_filename)
         self._detail_field(detail, 1, _("Status"), self.detail_status)
-        self._detail_field(detail, 2, _("Lexware file ID"), self.detail_file_id, "file_id")
-        self._detail_field(detail, 3, _("Lexware voucher ID"), self.detail_voucher_id, "voucher_id")
+        self._detail_field(detail, 2, _("Lexware-Datei-ID"), self.detail_file_id, "file_id")
+        self._detail_field(detail, 3, _("Lexware-Beleg-ID"), self.detail_voucher_id, "voucher_id")
 
         action = self.ttk.Frame(self.review_section, style="Action.TFrame", padding=12)
         action.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(18, 0))
-        self.action_status = self.tk.StringVar(value=_("Select a document to review."))
+        self.action_status = self.tk.StringVar(value=_("Wähle ein Dokument zur Prüfung."))
         self.action_guidance = self.tk.StringVar()
         self.upload_button = self.ttk.Button(
             action,
-            text=_("Send selected document"),
+            text=_("Ausgewähltes Dokument senden"),
             command=self._upload,
             style="Primary.TButton",
         )
@@ -467,7 +477,7 @@ class DesktopApplication:
         entry.grid(row=row, column=1, sticky="ew", pady=4)
         if copy_key:
             self.ttk.Button(
-                parent, text=_("Copy"), command=lambda key=copy_key: self._copy_detail(key)
+                parent, text=_("Kopieren"), command=lambda key=copy_key: self._copy_detail(key)
             ).grid(row=row, column=2, sticky="e", padx=(12, 0), pady=4)
         parent.columnconfigure(1, weight=1)
 
@@ -505,7 +515,12 @@ class DesktopApplication:
                 "", "end", values=(candidate["filename"], format_size(candidate["size"]))
             )
             self._candidate_ids[row] = candidate["id"]
-        self.notice.set(_("Select one or more attachments, then choose Prepare selected documents."))
+        self.notice.set(
+            _(
+                "Wähle mindestens einen Anhang aus und klicke dann auf „Ausgewählte "
+                "Dokumente vorbereiten“."
+            )
+        )
 
     def _stage(self) -> None:
         selected_rows = self.candidates_view.selection()
@@ -515,7 +530,7 @@ class DesktopApplication:
         except Exception as error:
             self.notice.set(_safe_error("stage", error))
             return
-        self.notice.set(_("Selected files were saved locally; nothing was sent to Lexware."))
+        self.notice.set(_("Ausgewählte Dateien wurden lokal gespeichert; nichts wurde an Lexware gesendet."))
         self._load_documents()
 
     def _load_documents(self) -> None:
@@ -529,7 +544,7 @@ class DesktopApplication:
         self._detail_row = None
         detail_filename = getattr(self, "detail_filename", None)
         if detail_filename is not None:
-            detail_filename.set(_("Select a document to review."))
+            detail_filename.set(_("Wähle ein Dokument zur Prüfung."))
         detail_status = getattr(self, "detail_status", None)
         if detail_status is not None:
             detail_status.set("")
@@ -551,9 +566,9 @@ class DesktopApplication:
             status_code = str(document.get("status", "unknown"))
             display_status = status_label(status_code)
             if status_code == "uploaded" and document.get("origin") == "already_present":
-                display_status = _("already present in Lexware")
+                display_status = _("Bereits in Lexware vorhanden")
             if integrity != "ok":
-                display_status = _("Restore required")
+                display_status = _("Wiederherstellung erforderlich")
                 restore_required = True
             row = self.documents_view.insert(
                 "",
@@ -583,7 +598,7 @@ class DesktopApplication:
         rows = self.documents_view.selection()
         if not rows:
             self._detail_row = None
-            self.detail_filename.set(_("Select a document to review."))
+            self.detail_filename.set(_("Wähle ein Dokument zur Prüfung."))
             detail_status = getattr(self, "detail_status", None)
             if detail_status is not None:
                 detail_status.set("")
@@ -611,7 +626,7 @@ class DesktopApplication:
             return
         if action is None:
             enabled = False
-            status_text = _("Select a document to review.")
+            status_text = _("Wähle ein Dokument zur Prüfung.")
             guidance_text = ""
         else:
             enabled, status_text, guidance_text = action
@@ -624,12 +639,15 @@ class DesktopApplication:
         variable = variables.get(field)
         value = variable.get() if variable is not None else ""
         if not value:
-            self.notice.set(_("No Lexware identifier is available for this document."))
+            self.notice.set(_("Für dieses Dokument ist keine Lexware-Kennung verfügbar."))
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(value)
-        field_labels = {"file_id": _("Lexware file ID"), "voucher_id": _("Lexware voucher ID")}
-        self.notice.set(_("Copied %(field)s to the clipboard.") % {"field": field_labels.get(field, field)})
+        field_labels = {"file_id": _("Lexware-Datei-ID"), "voucher_id": _("Lexware-Beleg-ID")}
+        self.notice.set(
+            _("%(field)s wurde in die Zwischenablage kopiert.")
+            % {"field": field_labels.get(field, field)}
+        )
 
     def _status_code_for_row(self, row: str, values: Sequence[Any]) -> str:
         document_status: dict[str, str] = getattr(self, "_document_status", {})
@@ -643,7 +661,7 @@ class DesktopApplication:
     def _upload(self) -> None:
         rows = self.documents_view.selection()
         if len(rows) != 1:
-            self.notice.set(_("Select one staged document to send."))
+            self.notice.set(_("Wähle genau ein vorbereitetes Dokument zum Senden aus."))
             return
         row = rows[0]
         values = self.documents_view.item(row, "values")
@@ -652,15 +670,19 @@ class DesktopApplication:
             return
         status = self._status_code_for_row(row, values)
         if status in {"uncertain", "uploading"}:
-            self.notice.set(_("Outcome is uncertain; use the CLI recovery and reconciliation commands."))
+            self.notice.set(
+                _("Ergebnis unklar; verwende die CLI-Befehle zur Wiederherstellung und Abstimmung.")
+            )
             return
         if status != "staged":
-            self.notice.set(_("Only staged documents can be sent."))
+            self.notice.set(_("Nur vorbereitete Dokumente können gesendet werden."))
             return
         filename = _safe_filename(values[0])
         size = format_size(values[1]) if isinstance(values[1], int) else str(values[1])
         if not self.messagebox.askyesno(
-            _("Confirm send"), _("Send %(filename)s (%(size)s) to Lexware?") % {"filename": filename, "size": size}
+            _("Senden bestätigen"),
+            _("Soll %(filename)s (%(size)s) an Lexware gesendet werden?")
+            % {"filename": filename, "size": size},
         ):
             return
         try:
@@ -675,13 +697,13 @@ class DesktopApplication:
             return
         if result.get("status") == "already_present":
             self.notice.set(
-                _("Already present in Lexware; no upload was sent. Lexware file %(file_id)s "
-                  "and voucher %(voucher_id)s.")
+                _("Bereits in Lexware vorhanden; es wurde nichts gesendet. Lexware-Datei %(file_id)s "
+                  "und Beleg %(voucher_id)s.")
                 % {"file_id": result["id"], "voucher_id": result["voucherId"]}
             )
         else:
             self.notice.set(
-                _("Uploaded; Lexware file %(file_id)s and voucher %(voucher_id)s.")
+                _("Gesendet; Lexware-Datei %(file_id)s und Beleg %(voucher_id)s.")
                 % {"file_id": result["id"], "voucher_id": result["voucherId"]}
             )
         self._load_documents()
@@ -694,7 +716,10 @@ def run_desktop(data_dir: Path | None) -> None:
     except ModuleNotFoundError as error:
         if error.name == "tkinter":
             raise DesktopUnavailableError(
-                _("Desktop UI is unavailable; install Python Tk support and run 'belegdock desktop' again.")
+                _(
+                    "Desktop-Oberfläche ist nicht verfügbar; installiere Python-Tk-Unterstützung "
+                    "und starte „belegdock desktop“ erneut."
+                )
             ) from error
         raise
     from . import cli

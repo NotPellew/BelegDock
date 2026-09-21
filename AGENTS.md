@@ -25,14 +25,21 @@ evidence. Do not maintain duplicate feature specifications in docs/.
    For state-dependent recovery or failure guidance, enumerate persisted states
    and failure boundaries (before an operation begins, during local work, and
    after a remote call), then map each to allowed operator guidance.
+   For UI or localization work, enumerate every visible entry point, including
+   each subcommand's help output and every failure/recovery state, and map each
+   item to a test or package smoke check.
 3. Write each feature test before its corresponding behavior. Execute it against
    the code missing that behavior and observe the intended failure (RED).
-4. Record the test snapshot and evidence before implementation. A test-only
-   checkpoint commit is permitted.
+4. Record the test snapshot and evidence before implementation. For every
+   changed existing test, create the approved test-only checkpoint before source
+   implementation, point replay metadata at that pre-implementation checkpoint,
+   and retain the approval reference with the task or PR evidence.
 5. Implement the smallest sufficient change. Run the unchanged tests (GREEN),
    then refactor with tests remaining green.
 6. Review the complete relevant diff against the issue, including failure cases,
    usability, security, and unnecessary complexity.
+   Complete any explicitly requested independent review before claiming the
+   issue is done.
 7. Treat reviewer findings as hypotheses: reproduce or otherwise verify them
    against current code, tests, or the governing contract before repair. For
    confirmed behavioral defects, add a reproducing test before repair. Repeat
@@ -151,6 +158,10 @@ identity, and count on every event. Permitted failure markers (`AssertionError` 
 and a `GROUPS` update; `--verify` fails until the reference is updated. Nightly
 execution catches toolchain drift (Python/pytest/`uv.lock`) and regenerates
 retained evidence.
+Before declaring the feature complete, also run a full replay with
+`scripts/replay_red.py --output ...`. `--verify` checks checkpoint identity and
+test shape only; it does not prove that the archived tests still fail against the
+archived pre-fix source. A replay checkpoint that already passes is invalid.
 The replay validates historical snapshots, not chronology by itself. Review
 regression RED remains in local logs. Preserve checkpoint commits when merging;
 if approved tests change, establish replacement RED evidence before updating

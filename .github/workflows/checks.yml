@@ -44,4 +44,4 @@ jobs:
           directory=tempfile.mkdtemp(prefix='belegdock-wheel-smoke-');
           subprocess.run([shutil.which('uv'), 'pip', 'install', '--python', sys.executable, '--no-deps', '--reinstall', '--no-index', '--find-links', str(pathlib.Path(wheel).parent), wheel], cwd=directory, check=True);
           result=subprocess.run([sys.executable, '-m', 'belegdock', '--help'], cwd=directory, text=True, capture_output=True, check=True);
-          assert 'early-stage' in result.stdout"
+          assert 'Schnellstart:' in result.stdout"

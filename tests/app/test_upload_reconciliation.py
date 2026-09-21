@@ -149,7 +149,7 @@ class UploadRecoveryTests(unittest.TestCase):
 
         self.assertEqual(status, 1)
         self.assertIn("406", error.getvalue())
-        self.assertIn("rejected", error.getvalue().lower())
+        self.assertIn("abgelehnt", error.getvalue().lower())
         self.assertNotIn("secret remote document", output.getvalue() + error.getvalue())
 
 
