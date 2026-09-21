@@ -34,6 +34,7 @@ GROUPS = (
     ("recovery_status_lookup", "d809154", "test_cli_recovery_status_lookup.py", 1, {"AssertionError"}),
     ("rejected_upload_guidance", "9d84cdb", "test_cli_rejected_upload_guidance.py", 1, {"AssertionError"}),
     ("uploaded_upload_guidance", "f9c5e03", "test_cli_uploaded_upload_guidance.py", 1, {"AssertionError"}),
+    ("recovery_lock_guidance", "be0401c", "test_cli_recovery_lock_guidance.py", 3, {"AssertionError"}),
 )
 
 
