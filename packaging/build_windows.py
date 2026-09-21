@@ -191,6 +191,21 @@ def _reset_build_root() -> None:
     WORK_DIR.mkdir(parents=True)
 
 
+def _iscc() -> str:
+    found = shutil.which("iscc") or shutil.which("ISCC")
+    if found:
+        return found
+    program_files_x86 = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+    program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+    for candidate in (
+        program_files_x86 / "Inno Setup 6" / "ISCC.exe",
+        program_files / "Inno Setup 6" / "ISCC.exe",
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    raise SystemExit("ISCC.exe not found; install Inno Setup 6")
+
+
 def _create_venv() -> Path:
     _run([sys.executable, "-m", "venv", str(VENV_DIR)])
     python = VENV_DIR / "Scripts" / "python.exe"
@@ -256,7 +271,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     _require(bundle.is_dir(), f"expected onedir bundle at {bundle}")
     _run(
         [
-            "iscc",
+            _iscc(),
             f"/DAppVersion={version}",
             f"/DVersionInfo={version_info(version)}",
             f"/DDistDir={dist}",
