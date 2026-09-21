@@ -52,6 +52,7 @@ class GermanArgumentParser(argparse.ArgumentParser):
             .replace("invalid choice:", "Ungültige Auswahl:")
             .replace(" (choose from ", " (mögliche Werte: ")
             .replace("unrecognized arguments:", "Unbekannte Argumente:")
+            .replace("ignored explicit argument", "Explizites Argument")
             .replace("argument ", "Argument ")
         )
         self.print_usage(sys.stderr)
