@@ -45,7 +45,7 @@ class RecoveryStateUnavailableCliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertEqual(Store(self.root).list_documents()[0]["status"], "uncertain")
-        self.assertIn(f"Upload outcome could not be checked for {digest}; do not retry.", error)
+        self.assertIn(f"Sendeergebnis für {digest} konnte nicht geprüft werden; nicht erneut senden.", error)
         self.assertNotIn("correct the problem and retry", error)
 
 
