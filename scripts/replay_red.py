@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 
 
 GROUPS = (
-    ("bootstrap", "b4ffc7b", "test_cli_bootstrap.py", 2, {"AssertionError"}),
+    ("bootstrap", "9d0ba84", "test_cli_bootstrap.py", 2, {"AssertionError"}),
     ("accounts", "439ced7", "test_accounts.py", 5, {"AssertionError"}),
     ("integrations", "0c57455", "test_integrations.py", 7, {"AssertionError"}),
     ("workflow", "0c57455", "test_workflow.py", 12, {"NotImplementedError"}),
@@ -23,7 +23,7 @@ GROUPS = (
     ("login", "afc60ac", "test_login.py", 3, {"AssertionError", "NotImplementedError"}),
     ("integration_validation", "052c772", "test_integration_validation.py", 4, {"AssertionError"}),
     ("workflow_recovery", "2cb17cd", "test_workflow_recovery.py", 4, {"NotImplementedError"}),
-    ("help", "013b983367a1dcba845a3fea24fc85150b540d29", "test_cli_help.py", 2, {"AssertionError"}),
+    ("help", "9d0ba84", "test_cli_help.py", 2, {"AssertionError"}),
     ("recovery_commands", "f08c675", "test_cli_recovery_commands.py", 3, {"AssertionError"}),
     ("recovery_review_regressions", "2c8a7a5", "test_cli_recovery_review_regressions.py", 2, {"AssertionError"}),
     ("recovery_state_guidance", "f80559e", "test_cli_recovery_state_guidance.py", 2, {"AssertionError"}),

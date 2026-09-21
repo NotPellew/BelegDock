@@ -35,6 +35,15 @@ class GermanArgumentParser(argparse.ArgumentParser):
     def format_usage(self) -> str:
         return super().format_usage().replace("usage:", "Aufruf:", 1)
 
+    def format_help(self) -> str:
+        return (
+            super()
+            .format_help()
+            .replace("usage:", "Aufruf:", 1)
+            .replace("options:", "Optionen:", 1)
+            .replace("show this help message and exit", "Diese Hilfe anzeigen und beenden", 1)
+        )
+
 
 def build_gmail(credentials: Any) -> Any:
     return import_module("googleapiclient.discovery").build(
@@ -140,14 +149,26 @@ def make_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--data-dir", type=Path, help="Lokales Staging- und SQLite-Verzeichnis überschreiben")
     parser._optionals.title = "Optionen"
-    commands = parser.add_subparsers(dest="command", title="Befehle")
-    login = commands.add_parser("login-gmail", help="Gmail-Lesezugriff über Browser-OAuth verbinden")
+    commands = parser.add_subparsers(dest="command", title="Befehle", parser_class=GermanArgumentParser)
+
+    def add_command(name: str, **kwargs: Any) -> argparse.ArgumentParser:
+        command = commands.add_parser(
+            name,
+            add_help=False,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            **kwargs,
+        )
+        command.add_argument("-h", "--help", action="help", help="Diese Hilfe anzeigen und beenden")
+        command._optionals.title = "Optionen"
+        return command
+
+    login = add_command("login-gmail", help="Gmail-Lesezugriff über Browser-OAuth verbinden")
     login.add_argument(
         "--client", type=Path, required=True, help="Desktop-OAuth-Client-JSON außerhalb des Checkouts"
     )
-    commands.add_parser("login-lexware", help="API-Schlüssel über eine verdeckte Eingabe speichern")
+    add_command("login-lexware", help="API-Schlüssel über eine verdeckte Eingabe speichern")
     for name in ("scan", "stage"):
-        command = commands.add_parser(
+        command = add_command(
             name,
             help="Kandidaten auflisten" if name == "scan" else "Ausgewählte Anhänge vorbereiten",
         )
@@ -159,14 +180,14 @@ def make_parser() -> argparse.ArgumentParser:
                 required=True,
                 help="Kandidaten-ID aus scan; für mehrere Auswahl wiederholen",
             )
-    commands.add_parser("documents", help="Lokale Dokumente und Übertragungsstatus auflisten")
-    commands.add_parser("desktop", help="Lokale Desktop-Oberfläche für die Dokumentübertragung öffnen")
-    commands.add_parser("refresh", help="Lokales Lexware-Dateiinventar aktualisieren")
-    upload = commands.add_parser("upload", help="Einen vorbereiteten Hash ausdrücklich senden")
+    add_command("documents", help="Lokale Dokumente und Übertragungsstatus auflisten")
+    add_command("desktop", help="Lokale Desktop-Oberfläche für die Dokumentübertragung öffnen")
+    add_command("refresh", help="Lokales Lexware-Dateiinventar aktualisieren")
+    upload = add_command("upload", help="Einen vorbereiteten Hash ausdrücklich senden")
     upload.add_argument("hash")
-    recover = commands.add_parser("recover-upload", help="Unterbrochenes lokales Senden als unklar markieren")
+    recover = add_command("recover-upload", help="Unterbrochenes lokales Senden als unklar markieren")
     recover.add_argument("hash")
-    reconcile = commands.add_parser("reconcile", help="Bekanntes Remote-Dokument vor dem Speichern prüfen")
+    reconcile = add_command("reconcile", help="Bekanntes Remote-Dokument vor dem Speichern prüfen")
     reconcile.add_argument("hash")
     reconcile.add_argument("--file-id", required=True)
     reconcile.add_argument("--voucher-id", required=True)
