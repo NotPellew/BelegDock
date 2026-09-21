@@ -55,8 +55,8 @@ class RecoveryLockGuidanceCliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertEqual(Store(self.root).list_documents()[0]["status"], "staged")
-        self.assertIn("active", error)
-        self.assertIn("wait", error)
+        self.assertIn("aktiv", error)
+        self.assertIn("warte", error)
         self.assertNotIn("correct the problem and retry", error)
         self.assertNotIn(f"belegdock recover-upload {self.digest}", error)
         self.assertNotIn("belegdock reconcile", error)
@@ -70,8 +70,8 @@ class RecoveryLockGuidanceCliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertEqual(Store(self.root).list_documents()[0]["status"], "staged")
-        self.assertIn("active", error)
-        self.assertNotIn("only an interrupted upload", error)
+        self.assertIn("aktiv", error)
+        self.assertNotIn("nur ein unterbrochenes Senden", error)
 
     def test_reconcile_does_not_offer_an_explicit_upload(self):
         self.hold_lock()
@@ -85,7 +85,7 @@ class RecoveryLockGuidanceCliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertEqual(Store(self.root).list_documents()[0]["status"], "staged")
-        self.assertIn("wait", error)
+        self.assertIn("warte", error)
         self.assertNotIn(f"belegdock upload {self.digest}", error)
 
 

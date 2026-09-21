@@ -15,26 +15,26 @@ import xml.etree.ElementTree as ET
 
 
 GROUPS = (
-    ("bootstrap", "9d0ba84", "test_cli_bootstrap.py", 2, {"AssertionError"}),
+    ("bootstrap", "90b84f13879c13be017ed6fac4b577861d63dfdd", "test_cli_bootstrap.py", 2, {"AssertionError"}),
     ("accounts", "439ced7", "test_accounts.py", 5, {"AssertionError"}),
     ("integrations", "0c57455", "test_integrations.py", 7, {"AssertionError"}),
     ("workflow", "0c57455", "test_workflow.py", 12, {"NotImplementedError"}),
-    ("commands", "680b1700e8017e2e4a83f8acf9d50252baa92b3f", "test_cli_workflow.py", 5, {"AssertionError"}),
+    ("commands", "578b10e2ba971ca5e9d47022751b653aace2f264", "test_cli_workflow.py", 5, {"AssertionError"}),
     ("login", "afc60ac", "test_login.py", 3, {"AssertionError", "NotImplementedError"}),
     ("integration_validation", "052c772", "test_integration_validation.py", 4, {"AssertionError"}),
     ("workflow_recovery", "2cb17cd", "test_workflow_recovery.py", 4, {"NotImplementedError"}),
-    ("help", "9d0ba84", "test_cli_help.py", 2, {"AssertionError"}),
-    ("recovery_commands", "f08c675", "test_cli_recovery_commands.py", 3, {"AssertionError"}),
-    ("recovery_review_regressions", "2c8a7a5", "test_cli_recovery_review_regressions.py", 2, {"AssertionError"}),
+    ("help", "46fd0cf51ebe8771c24d9866d258629ef9d709a1", "test_cli_help.py", 2, {"AssertionError"}),
+    ("recovery_commands", "d80c9110f79836290e69917e1c959d259f431121", "test_cli_recovery_commands.py", 3, {"AssertionError"}),
+    ("recovery_review_regressions", "0daacce8567a335e669862754c0d15c35bababd1", "test_cli_recovery_review_regressions.py", 2, {"AssertionError"}),
     ("recovery_state_guidance", "f80559e", "test_cli_recovery_state_guidance.py", 2, {"AssertionError"}),
-    ("recovery_state_unavailable", "be9de93", "test_cli_recovery_state_unavailable.py", 2, {"AssertionError"}),
-    ("recovery_unavailable_commands", "be9de93", "test_cli_recovery_unavailable_commands.py", 2, {"AssertionError"}),
-    ("recovery_integrity_guidance", "5e9bd53", "test_cli_recovery_integrity_guidance.py", 2, {"AssertionError"}),
-    ("recover_upload_integrity", "d22d75e", "test_cli_recover_upload_integrity.py", 1, {"AssertionError"}),
+    ("recovery_state_unavailable", "38b890149ba594590f229a2effcf421618da1c74", "test_cli_recovery_state_unavailable.py", 2, {"AssertionError"}),
+    ("recovery_unavailable_commands", "df0dd18a3aafc56b37678103f3b8d5fcea3977a8", "test_cli_recovery_unavailable_commands.py", 2, {"AssertionError"}),
+    ("recovery_integrity_guidance", "79ff45a55648e78c508e1303523fc809a1108be3", "test_cli_recovery_integrity_guidance.py", 2, {"AssertionError"}),
+    ("recover_upload_integrity", "e67375a7bf2980178825c7c774aeff41806b568d", "test_cli_recover_upload_integrity.py", 1, {"AssertionError"}),
     ("recovery_status_lookup", "d809154", "test_cli_recovery_status_lookup.py", 1, {"AssertionError"}),
-    ("rejected_upload_guidance", "9d84cdb", "test_cli_rejected_upload_guidance.py", 1, {"AssertionError"}),
-    ("uploaded_upload_guidance", "f9c5e03", "test_cli_uploaded_upload_guidance.py", 1, {"AssertionError"}),
-    ("recovery_lock_guidance", "be0401c", "test_cli_recovery_lock_guidance.py", 3, {"AssertionError"}),
+    ("rejected_upload_guidance", "59efa18d82dc4823ad7d736f6ee7c26fbdbd7dbd", "test_cli_rejected_upload_guidance.py", 1, {"AssertionError"}),
+    ("uploaded_upload_guidance", "13cbb07959104aa6afc06d0375bb5fa2bf07517e", "test_cli_uploaded_upload_guidance.py", 1, {"AssertionError"}),
+    ("recovery_lock_guidance", "b685ab9ba35238c85e4de658fa3c0ab3004e40b6", "test_cli_recovery_lock_guidance.py", 3, {"AssertionError"}),
 )
 
 

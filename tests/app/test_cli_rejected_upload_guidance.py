@@ -37,7 +37,7 @@ class RejectedUploadGuidanceCliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertEqual(Store(self.root).list_documents()[0]["status"], "rejected")
-        self.assertIn("Document was rejected; correct it and stage new bytes.", error)
+        self.assertIn("Dokument wurde abgelehnt; korrigiere es und bereite neue Bytes vor.", error)
         self.assertNotIn("retry", error.lower())
         self.assertNotIn("private client failure", error)
 

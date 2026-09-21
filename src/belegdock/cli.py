@@ -40,6 +40,7 @@ class GermanArgumentParser(argparse.ArgumentParser):
             super()
             .format_help()
             .replace("usage:", "Aufruf:", 1)
+            .replace("positional arguments:", "Positionsargumente:", 1)
             .replace("options:", "Optionen:", 1)
             .replace("show this help message and exit", "Diese Hilfe anzeigen und beenden", 1)
         )
@@ -97,7 +98,7 @@ def reconcile_command(digest: str) -> str:
 
 
 def transfer_active_wait_message(digest: str) -> str:
-    return f"Another operation is active for {digest}; wait for it to finish. Do not retry."
+    return f"Ein anderer Vorgang ist aktiv für {digest}; warte, bis er beendet ist. Nicht erneut senden."
 
 
 def recovery_state_unavailable_message(digest: str) -> str:
@@ -108,7 +109,10 @@ def recovery_state_unavailable_message(digest: str) -> str:
 
 
 def local_integrity_restore_message() -> str:
-    return "Local document integrity failed; restore state.sqlite3 and blobs from a consistent backup."
+    return (
+        "Lokale Dokumentintegrität fehlgeschlagen; stelle state.sqlite3 und blobs aus einer konsistenten Sicherung wieder her. "
+        "Wiederherstellung ist erforderlich."
+    )
 
 
 def valid_document_hash(digest: str) -> bool:
@@ -201,7 +205,7 @@ def dispatch(args: argparse.Namespace) -> Any:
         return {"account": connect_gmail(args.client)}
     if args.command == "login-lexware":
         accounts.native_backend()
-        accounts.save_secret("lexware", getpass.getpass("Lexware API key: "))
+        accounts.save_secret("lexware", getpass.getpass("Lexware-API-Schlüssel: "))
         return {"connected": "lexware"}
     if args.command in ("scan", "stage"):
         account, gmail = gmail_client()
@@ -282,21 +286,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     except DocumentRejected as error:
         print(
-            f"Upload rejected by Lexware (HTTP {error.status_code}); correct the document and stage new bytes.",
+            f"Lexware hat den Upload abgelehnt (HTTP {error.status_code}); korrigiere das Dokument und bereite die neuen Bytes vor.",
             file=sys.stderr,
         )
         return 1
     except LocalIntegrityError:
         print(
-            "Local data is unavailable; restore state.sqlite3 and blobs from a consistent backup.",
+            "Lokale Daten sind nicht verfügbar; stelle state.sqlite3 und blobs aus einer konsistenten Sicherung wieder her. "
+            "Wiederherstellung ist erforderlich.",
             file=sys.stderr,
         )
         return 1
     except TransferActiveError:
         if args.command == "recover-upload":
             print(
-                "Recovery failed; an active upload cannot be recovered. Wait for it to finish. If the "
-                f"process stopped before reporting an outcome, run '{recover_upload_command(args.hash)}'.",
+                "Wiederherstellung fehlgeschlagen; ein aktives Senden kann nicht wiederhergestellt werden. "
+                "Warte, bis es beendet ist. Wenn der Prozess vor der Ergebnismeldung beendet wurde, "
+                f"führe '{recover_upload_command(args.hash)}' aus.",
                 file=sys.stderr,
             )
         else:
@@ -311,10 +317,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     except Exception:
         if args.command == "stage":
-            message = "Staging failed; check selection, connection, file size, and local storage."
+            message = "Vorbereiten fehlgeschlagen; prüfe Auswahl, Verbindung, Dateigröße und lokalen Speicher."
         elif args.command == "upload":
             if not valid_document_hash(args.hash):
-                message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
+                message = "Ungültiger Dokument-Hash; führe 'belegdock documents' aus und kopiere einen SHA-256-Hash."
             else:
                 status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
                 if status == LOCAL_INTEGRITY_FAILED:
@@ -325,11 +331,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "Prüfe den lokalen Zustand und Lexware, bevor du einen Wiederherstellungsbefehl wählst."
                     )
                 elif status == "rejected":
-                    message = "Document was rejected; correct it and stage new bytes."
+                    message = "Dokument wurde abgelehnt; korrigiere es und bereite neue Bytes vor."
                 elif status == "uploaded":
                     message = (
-                        f"Upload is already recorded for {args.hash}; do not retry. Run 'belegdock documents' "
-                        "to inspect local state."
+                        f"Upload für {args.hash} ist bereits gespeichert; nicht erneut senden. Führe "
+                        "'belegdock documents' aus, um den lokalen Zustand zu prüfen."
                     )
                 elif status == "uncertain":
                     message = (
@@ -338,14 +344,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 elif status == "uploading":
                     message = (
-                        f"Upload is already active for {args.hash}; do not retry. If its process stopped before "
-                        f"reporting an outcome, run '{recover_upload_command(args.hash)}'."
+                        f"Senden für {args.hash} ist bereits aktiv; nicht erneut senden. Wenn der Prozess vor der "
+                        f"Ergebnismeldung beendet wurde, führe '{recover_upload_command(args.hash)}' aus."
                     )
                 else:
-                    message = "Upload failed before sending the document; correct the problem and retry."
+                    message = "Senden ist vor der Übertragung fehlgeschlagen; behebe das Problem und versuche es erneut."
         elif args.command == "recover-upload":
             if not valid_document_hash(args.hash):
-                message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
+                message = "Ungültiger Dokument-Hash; führe 'belegdock documents' aus und kopiere einen SHA-256-Hash."
             else:
                 status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
                 if status == LOCAL_INTEGRITY_FAILED:
@@ -359,14 +365,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 elif status == "uploading":
                     message = (
-                        "Recovery failed; an active upload cannot be recovered. Wait for it to finish. If the "
-                        f"process stopped before reporting an outcome, run '{recover_upload_command(args.hash)}'."
+                        "Wiederherstellung fehlgeschlagen; ein aktives Senden kann nicht wiederhergestellt werden. "
+                        "Warte, bis es beendet ist. Wenn der Prozess vor der Ergebnismeldung beendet wurde, "
+                        f"führe '{recover_upload_command(args.hash)}' aus."
                     )
                 else:
-                    message = "Recovery did not start; only an interrupted upload can be recovered. Check documents."
+                    message = "Wiederherstellung wurde nicht gestartet; nur ein unterbrochenes Senden kann "
+                    message += "wiederhergestellt werden. Prüfe documents."
         elif args.command == "reconcile":
             if not valid_document_hash(args.hash):
-                message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
+                message = "Ungültiger Dokument-Hash; führe 'belegdock documents' aus und kopiere einen SHA-256-Hash."
             else:
                 status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
                 if status == LOCAL_INTEGRITY_FAILED:
@@ -380,21 +388,22 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 elif status == "staged":
                     message = (
-                        f"Reconciliation did not start; the document is still staged. To send it explicitly, run "
-                        f"'belegdock upload {args.hash}'."
+                        f"Abstimmung wurde nicht gestartet; das Dokument ist noch vorbereitet. Zum ausdrücklichen "
+                        f"Senden führe 'belegdock upload {args.hash}' aus."
                     )
                 elif status == "uploading":
                     message = (
-                        "Reconciliation cannot run while an upload is active. If the process stopped before "
-                        f"reporting an outcome, run '{recover_upload_command(args.hash)}'."
+                        "Abstimmung ist nicht möglich, solange ein Senden aktiv ist. Wenn der Prozess vor der "
+                        f"Ergebnismeldung beendet wurde, führe '{recover_upload_command(args.hash)}' aus."
                     )
                 else:
-                    message = "Reconciliation did not start; only an uncertain upload can be reconciled. Check documents."
+                    message = "Abstimmung wurde nicht gestartet; nur ein unklarer Upload kann abgestimmt werden. "
+                    message += "Prüfe documents."
         elif args.command.startswith("login"):
             message = "Verbindung fehlgeschlagen; prüfe den nativen Anmeldedatenspeicher und die Konto-/Client-Einrichtung."
         elif args.command == "desktop":
             message = "Desktop-Vorgang fehlgeschlagen; prüfe die Python-Tk-Unterstützung und die Kontoeinrichtung."
         else:
-            message = "Operation failed; check account connection, label, and local storage."
+            message = "Vorgang fehlgeschlagen; prüfe Kontoverbindung, Label und lokalen Speicher."
         print(message, file=sys.stderr)
         return 1

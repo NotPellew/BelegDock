@@ -36,7 +36,7 @@ class RecoveryIntegrityGuidanceCliTests(unittest.TestCase):
         self.assertEqual(document["status"], "uncertain")
         self.assertEqual(document["localIntegrity"], "corrupt")
         self.assertIn(
-            "Local document integrity failed; restore state.sqlite3 and blobs from a consistent backup.",
+            "Lokale Dokumentintegrität fehlgeschlagen; stelle state.sqlite3 und blobs aus einer konsistenten Sicherung wieder her.",
             error,
         )
         self.assertNotIn(f"belegdock reconcile {digest}", error)

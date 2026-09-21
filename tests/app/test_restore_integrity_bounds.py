@@ -50,6 +50,6 @@ def test_unusable_database_cli_gives_restore_guidance_without_creating_blobs(tmp
     with redirect_stdout(output), redirect_stderr(error):
         result = cli.main(["--data-dir", str(tmp_path), "documents"])
     assert result != 0
-    assert "restore" in error.getvalue().lower()
+    assert "wiederher" in error.getvalue().lower()
     assert "private bytes" not in output.getvalue() + error.getvalue()
     assert not (tmp_path / "blobs").exists()
