@@ -53,6 +53,7 @@ class GermanArgumentParser(argparse.ArgumentParser):
             .replace(" (choose from ", " (mögliche Werte: ")
             .replace("unrecognized arguments:", "Unbekannte Argumente:")
             .replace("ignored explicit argument", "Explizites Argument")
+            .replace("argument command:", "Argument Befehl:")
             .replace("argument ", "Argument ")
         )
         self.print_usage(sys.stderr)
@@ -384,7 +385,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 else:
                     message = "Wiederherstellung wurde nicht gestartet; nur ein unterbrochenes Senden kann "
-                    message += "wiederhergestellt werden. Prüfe documents."
+                    message += "wiederhergestellt werden. Prüfe 'belegdock documents'."
         elif args.command == "reconcile":
             if not valid_document_hash(args.hash):
                 message = "Ungültiger Dokument-Hash; führe 'belegdock documents' aus und kopiere einen SHA-256-Hash."
@@ -411,7 +412,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 else:
                     message = "Abstimmung wurde nicht gestartet; nur ein unklarer Upload kann abgestimmt werden. "
-                    message += "Prüfe documents."
+                    message += "Prüfe 'belegdock documents'."
         elif args.command.startswith("login"):
             message = "Verbindung fehlgeschlagen; prüfe den nativen Anmeldedatenspeicher und die Konto-/Client-Einrichtung."
         elif args.command == "desktop":

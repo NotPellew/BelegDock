@@ -46,6 +46,7 @@ GROUPS = (
     ("upload_reconciliation", "7541b551da120594ea79f1727b52fbc95879864d", "test_upload_reconciliation.py", 1, {"AssertionError"}),
     ("parse_errors", "4f0d740", "test_german_cli_parse_errors.py", 3, {"AssertionError"}),
     ("parse_error_edges", "28da414", "test_german_cli_parse_error_edges.py", 2, {"AssertionError"}),
+    ("final_guidance", "47b5d5d", "test_german_cli_final_guidance.py", 3, {"AssertionError"}),
 )
 
 
