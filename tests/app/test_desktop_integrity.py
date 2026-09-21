@@ -28,8 +28,11 @@ class DesktopIntegrityTests(unittest.TestCase):
         self.assertNotEqual(app.documents_view.values[0][2], "staged")
         app._upload()
 
-        self.assertIn("restore state.sqlite3 and blobs from a consistent backup", app.notice.value)
-        self.assertNotIn("retry", app.notice.value.lower())
+        self.assertIn(
+            "state.sqlite3 und blobs aus einer konsistenten Sicherung wieder her",
+            app.notice.value,
+        )
+        self.assertNotIn("erneut", app.notice.value.lower())
         app.service.upload.assert_not_called()
 
 
