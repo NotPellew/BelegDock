@@ -43,7 +43,7 @@ class RecoverUploadIntegrityCliTests(unittest.TestCase):
         self.assertEqual(document["status"], "uploading")
         self.assertEqual(document["localIntegrity"], "corrupt")
         self.assertIn(
-            "Local data is unavailable; restore state.sqlite3 and blobs from a consistent backup.",
+            "Lokale Daten sind nicht verfügbar; stelle state.sqlite3 und blobs aus einer konsistenten Sicherung wieder her.",
             error,
         )
 
