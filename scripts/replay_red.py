@@ -24,7 +24,7 @@ GROUPS = (
     ("integration_validation", "052c772", "test_integration_validation.py", 4, {"AssertionError"}),
     ("workflow_recovery", "2cb17cd", "test_workflow_recovery.py", 4, {"NotImplementedError"}),
     ("help", "013b983367a1dcba845a3fea24fc85150b540d29", "test_cli_help.py", 2, {"AssertionError"}),
-    ("recovery_commands", "19431c0", "test_cli_recovery_commands.py", 3, {"AssertionError"}),
+    ("recovery_commands", "f08c675", "test_cli_recovery_commands.py", 3, {"AssertionError"}),
     ("recovery_review_regressions", "2c8a7a5", "test_cli_recovery_review_regressions.py", 2, {"AssertionError"}),
     ("recovery_state_guidance", "f80559e", "test_cli_recovery_state_guidance.py", 2, {"AssertionError"}),
 )

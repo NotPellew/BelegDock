@@ -246,8 +246,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 status = document_status(args.data_dir or default_data_dir(), args.hash)
                 if status == "uncertain":
                     message = (
-                        f"Upload outcome is uncertain for {args.hash}; do not retry. If this process stopped before "
-                        f"reporting its outcome, run '{recover_upload_command(args.hash)}'. Inspect Lexware, then run "
+                        f"Upload outcome is uncertain for {args.hash}; do not retry. Inspect Lexware, then run "
                         f"'{reconcile_command(args.hash)}'."
                     )
                 elif status == "uploading":
