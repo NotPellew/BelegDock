@@ -26,7 +26,7 @@ class DesktopAlreadyPresentTests(unittest.TestCase):
 
         app._load_documents()
 
-        self.assertEqual(app.documents_view.values[0][2], "already present in Lexware")
+        self.assertEqual(app.documents_view.values[0][2], "Bereits in Lexware vorhanden")
 
     def test_already_present_result_says_no_upload_was_sent(self):
         app = DesktopApplication.__new__(DesktopApplication)
@@ -47,8 +47,8 @@ class DesktopAlreadyPresentTests(unittest.TestCase):
 
         app._upload()
 
-        self.assertIn("already present in lexware", app.notice.value.lower())
-        self.assertIn("no upload was sent", app.notice.value.lower())
+        self.assertIn("bereits in lexware vorhanden", app.notice.value.lower())
+        self.assertIn("nichts gesendet", app.notice.value.lower())
         self.assertIn("file-existing", app.notice.value)
         self.assertIn("voucher-existing", app.notice.value)
 
