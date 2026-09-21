@@ -81,6 +81,13 @@ def reconcile_command(digest: str) -> str:
     return f"belegdock reconcile {digest} --file-id FILE_ID --voucher-id VOUCHER_ID"
 
 
+def recovery_state_unavailable_message(digest: str) -> str:
+    return (
+        f"Recovery state could not be checked for {digest}; do not retry the upload. "
+        "Restore or inspect local state before choosing a recovery command."
+    )
+
+
 def valid_document_hash(digest: str) -> bool:
     try:
         Store._validate_digest(digest)
@@ -265,8 +272,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not valid_document_hash(args.hash):
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
-                status, _ = document_status(args.data_dir or default_data_dir(), args.hash)
-                if status == "uncertain":
+                status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
+                if not status_available:
+                    message = recovery_state_unavailable_message(args.hash)
+                elif status == "uncertain":
                     message = (
                         f"Recovery is not needed; the outcome for {args.hash} is already uncertain. Do not retry "
                         f"the upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
@@ -282,8 +291,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not valid_document_hash(args.hash):
                 message = "Invalid document hash; run 'belegdock documents' and copy a SHA-256 hash."
             else:
-                status, _ = document_status(args.data_dir or default_data_dir(), args.hash)
-                if status == "uncertain":
+                status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
+                if not status_available:
+                    message = recovery_state_unavailable_message(args.hash)
+                elif status == "uncertain":
                     message = (
                         f"Reconciliation failed for {args.hash}; the document remains uncertain. Do not retry the "
                         f"upload. Inspect Lexware, then run '{reconcile_command(args.hash)}'."
