@@ -39,7 +39,10 @@ class RecoveryUnavailableCommandsCliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertEqual(Store(self.root).list_documents()[0]["status"], "uncertain")
-        self.assertIn(f"Recovery state could not be checked for {digest}; do not retry the upload.", error)
+        self.assertIn(
+            f"Wiederherstellungsstatus für {digest} konnte nicht geprüft werden; den Upload nicht erneut senden.",
+            error,
+        )
         self.assertNotIn("only an interrupted upload", error)
 
     def test_reconciliation_does_not_suggest_more_commands_when_state_lookup_fails(self):
@@ -57,7 +60,10 @@ class RecoveryUnavailableCommandsCliTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertEqual(output, "")
         self.assertEqual(Store(self.root).list_documents()[0]["status"], "uncertain")
-        self.assertIn(f"Recovery state could not be checked for {digest}; do not retry the upload.", error)
+        self.assertIn(
+            f"Wiederherstellungsstatus für {digest} konnte nicht geprüft werden; den Upload nicht erneut senden.",
+            error,
+        )
         self.assertNotIn("only an uncertain upload", error)
 
 
