@@ -27,6 +27,7 @@ GROUPS = (
     ("recovery_commands", "f08c675", "test_cli_recovery_commands.py", 3, {"AssertionError"}),
     ("recovery_review_regressions", "2c8a7a5", "test_cli_recovery_review_regressions.py", 2, {"AssertionError"}),
     ("recovery_state_guidance", "f80559e", "test_cli_recovery_state_guidance.py", 2, {"AssertionError"}),
+    ("recovery_state_unavailable", "2e17ec9", "test_cli_recovery_state_unavailable.py", 2, {"AssertionError"}),
 )
 
 
