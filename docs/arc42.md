@@ -230,9 +230,15 @@ and host sockets are not. The session gets a temporary home and /tmp.
   uninstaller before checking removal. ARM64 and Windows versions before 10 22H2
   are unsupported and refused by `ArchitecturesAllowed=x64os`. PyInstaller support
   for the CI Python versions (3.12/3.14) must be rechecked when the pinned version
-  or the toolchain changes. Freezing succeeds only on Windows; until a
-  `windows-installer` run exists, the spec, the bundle layout and the Inno
-  invocation are unverified.
+  or the toolchain changes. Freezing succeeds only on Windows; the
+  `windows-installer` run of 2026-09-22 (revision `aaecf2f`, windows-latest,
+  Python 3.12) verified the frozen bundle layout, the artifact checks and the
+  silent install, offline smoke and uninstall sequence, including preserved user
+  data. Launching the Tk window, upgrading an existing installation and any live
+  Gmail/Lexware use remain manual or separately authorized checks. The packaging
+  RED groups replay in a sandbox that contains only `src` and the test file, so
+  they show the missing packaging assets fail RED rather than a specific pre-fix
+  packaging defect; the per-defect evidence is in the recorded RED run.
 - The cleanup policy and the backup/restore behavior still need a user-facing
   decision; the supported Windows versions are now fixed for the pilot installer.
 
