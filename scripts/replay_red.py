@@ -49,6 +49,7 @@ GROUPS = (
     ("final_guidance", "47b5d5d", "test_german_cli_final_guidance.py", 3, {"AssertionError"}),
     ("windows_packaging", "beaf52ac145821cd88de123d05243715181d9c30", "test_windows_packaging.py", 10, {"AssertionError"}),
     ("windows_packaging_bounds", "beaf52ac145821cd88de123d05243715181d9c30", "test_windows_packaging_bounds.py", 4, {"AssertionError"}),
+    ("windows_packaging_internal", "c6bdc14395fc532f9baae0e823d868632668b0b7", "test_windows_packaging_internal.py", 1, {"AssertionError"}),
     ("desktop_launch", "29d8232bdeb2c331cdb77d4211c9ff96bf00301f", "test_desktop_launch.py", 3, {"AssertionError"}),
 )
 
