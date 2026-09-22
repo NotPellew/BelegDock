@@ -95,10 +95,11 @@ removes both without touching `%LOCALAPPDATA%\BelegDock`. The build runs only on
 Windows from a neutral work root (`C:\belegdock-build`), installs the application
 dependencies from the frozen `uv.lock` with `uv export` and `--require-hashes`,
 and pins `pyinstaller` in `packaging/build_windows.py` so `pyproject.toml` and
-`uv.lock` stay untouched. CI retains the setup executable and `artifact.json`
-(sha256, size, wheel hash, resolved dependency versions, tool versions, git
-revision) as a 90-day workflow artifact; there is no GitHub Release and no code
-signing. The real window launch stays a manual native Windows check.
+`uv.lock` stay untouched. CI retains the installer folder (setup executable,
+`artifact.json` with sha256, size, wheel hash, resolved dependency versions, tool
+versions and git revision, plus the frozen bundle) as a 90-day workflow artifact;
+there is no GitHub Release and no code signing. The real window launch stays a
+manual native Windows check.
 
 Developer isolation currently requires Linux and Bubblewrap; native Windows
 fails explicitly. This limitation does not change the application's platform
