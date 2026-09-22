@@ -7,8 +7,10 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 PYINSTALLER_VERSION = "6.11.1"
+PYINSTALLER_HOOKS_VERSION = "2026.7"
 BUNDLE_NAME = "BelegDock"
 CONSOLE_EXE = "belegdock.exe"
 GUI_EXE = "BelegDock-Desktop.exe"
@@ -26,6 +28,8 @@ ISS_FILE = PACKAGING_DIR / "belegdock.iss"
 FORBIDDEN_NAMES = {"state.sqlite3", ".env"}
 FORBIDDEN_PARTS = {"blobs", "tests"}
 FORBIDDEN_SUFFIXES = {".pem", ".whl"}
+PUBLIC_CA_BUNDLE_DIRECTORY = "certifi"
+PUBLIC_CA_BUNDLE_NAME = "cacert.pem"
 FORBIDDEN_NAME_PATTERNS = (
     re.compile(r"^client.*\.json$", re.IGNORECASE),
     re.compile(r"^test_.*\.py$", re.IGNORECASE),
@@ -50,10 +54,12 @@ TEXT_SUFFIXES = {
     ".sh",
 }
 
-REQUIRED_BUNDLE_ENTRIES = ("_tkinter.pyd", "tcl", "tk", CONSOLE_EXE, GUI_EXE)
+REQUIRED_BUNDLE_ENTRIES = ("_tkinter.pyd", "_tcl_data", "_tk_data", CONSOLE_EXE, GUI_EXE)
+REQUIRED_BUNDLE_FILES = ("certifi/cacert.pem",)
 REQUIRED_MODULES = (
     "belegdock.cli",
     "belegdock.desktop",
+    "certifi",
     "googleapiclient.discovery",
     "google_auth_oauthlib.flow",
     "google.oauth2.credentials",
@@ -65,6 +71,11 @@ REQUIRED_MODULES = (
 )
 
 SILENT_FLAGS = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"]
+DESKTOP_CREDENTIAL_FAILURE = "Desktop-Vorgang fehlgeschlagen"
+
+
+def desktop_probe_is_credential_failure(returncode: int, stderr: str) -> bool:
+    return returncode == 1 and DESKTOP_CREDENTIAL_FAILURE in stderr
 
 
 def artifact_name(version: str) -> str:
@@ -93,6 +104,7 @@ def build_manifest(
     python: str,
     pyinstaller: str,
     git_revision: str,
+    dependencies: dict | None = None,
 ) -> dict:
     artifact_path = Path(artifact)
     wheel_path = Path(wheel)
@@ -106,6 +118,7 @@ def build_manifest(
         "python": python,
         "pyinstaller": pyinstaller,
         "git_revision": git_revision,
+        "dependencies": dict(dependencies or {}),
     }
 
 
@@ -114,6 +127,13 @@ def _read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return ""
+
+
+def _is_public_ca_bundle(path: Path) -> bool:
+    return (
+        path.name.lower() == PUBLIC_CA_BUNDLE_NAME
+        and path.parent.name.lower() == PUBLIC_CA_BUNDLE_DIRECTORY
+    )
 
 
 def forbidden_entries(root: Path) -> list[str]:
@@ -125,7 +145,7 @@ def forbidden_entries(root: Path) -> list[str]:
         if name in FORBIDDEN_NAMES or set(relative.parts) & FORBIDDEN_PARTS:
             findings.add(relative.as_posix())
             continue
-        if path.suffix.lower() in FORBIDDEN_SUFFIXES:
+        if path.suffix.lower() in FORBIDDEN_SUFFIXES and not _is_public_ca_bundle(path):
             findings.add(relative.as_posix())
             continue
         if any(pattern.match(name) for pattern in FORBIDDEN_NAME_PATTERNS):
@@ -147,6 +167,16 @@ def data_dir_is_external(data_dir: Path, install_dir: Path) -> bool:
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise SystemExit(f"artifact check failed: {message}")
+
+
+def _wait_until(predicate, timeout: float = 120.0, interval: float = 1.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(interval)
 
 
 def _run(command, **kwargs) -> None:
@@ -220,10 +250,59 @@ def _find_bundle_entry(bundle: Path, name: str) -> Path | None:
     return None
 
 
-def _archive_viewer() -> Path:
-    viewer = VENV_DIR / "Scripts" / "pyi-archive_viewer.exe"
-    _require(viewer.is_file(), "pyi-archive_viewer is missing; run build first")
-    return viewer
+def _archive_viewer_command() -> list[str]:
+    for interpreter in (VENV_DIR / "Scripts" / "python.exe", Path(sys.executable)):
+        if not interpreter.is_file():
+            continue
+        probe = subprocess.run(
+            [str(interpreter), "-c", "import PyInstaller.utils.cliutils.archive_viewer"],
+            capture_output=True,
+        )
+        if probe.returncode == 0:
+            return [str(interpreter), "-m", "PyInstaller.utils.cliutils.archive_viewer"]
+    raise SystemExit("pyi archive viewer not found; install PyInstaller or run build first")
+
+
+def _installed_packages(python: Path) -> dict[str, str]:
+    result = subprocess.run(
+        [str(python), "-m", "pip", "list", "--format=json", "--disable-pip-version-check"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return {str(entry["name"]): str(entry["version"]) for entry in json.loads(result.stdout)}
+
+
+def _install_frozen_dependencies(python: Path) -> None:
+    uv = shutil.which("uv")
+    _require(uv is not None, "uv is required to install the locked application dependencies")
+    requirements = BUILD_ROOT / "requirements-frozen.txt"
+    _run(
+        [
+            uv,
+            "export",
+            "--frozen",
+            "--no-dev",
+            "--no-emit-project",
+            "--output-file",
+            str(requirements),
+        ],
+        cwd=REPOSITORY_ROOT,
+    )
+    _run(
+        [
+            python,
+            "-m",
+            "pip",
+            "install",
+            "--no-input",
+            "--no-cache-dir",
+            "--disable-pip-version-check",
+            "--require-hashes",
+            "-r",
+            str(requirements),
+        ]
+    )
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -237,6 +316,7 @@ def cmd_build(args: argparse.Namespace) -> int:
     dist.mkdir(parents=True)
     _reset_build_root()
     python = _create_venv()
+    _install_frozen_dependencies(python)
     _run(
         [
             python,
@@ -246,8 +326,21 @@ def cmd_build(args: argparse.Namespace) -> int:
             "--no-input",
             "--no-cache-dir",
             "--disable-pip-version-check",
+            "--no-deps",
             str(wheel),
+        ]
+    )
+    _run(
+        [
+            python,
+            "-m",
+            "pip",
+            "install",
+            "--no-input",
+            "--no-cache-dir",
+            "--disable-pip-version-check",
             f"pyinstaller=={PYINSTALLER_VERSION}",
+            f"pyinstaller-hooks-contrib=={PYINSTALLER_HOOKS_VERSION}",
         ]
     )
     environment = dict(os.environ)
@@ -288,6 +381,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         python=sys.version.split()[0],
         pyinstaller=PYINSTALLER_VERSION,
         git_revision=_git_revision(),
+        dependencies=_installed_packages(python),
     )
     (dist / "artifact.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(manifest, indent=2))
@@ -303,20 +397,17 @@ def cmd_check_artifact(args: argparse.Namespace) -> int:
     _require(artifact.stat().st_size == manifest["size"], "installer size differs from manifest")
     bundle = dist / BUNDLE_NAME
     _require(bundle.is_dir(), "missing onedir bundle")
-    for entry in REQUIRED_BUNDLE_ENTRIES:
+    for entry in (*REQUIRED_BUNDLE_ENTRIES, *REQUIRED_BUNDLE_FILES):
         _require(
             _find_bundle_entry(bundle, entry) is not None,
             f"bundle misses {entry}",
         )
     _require(not forbidden_entries(dist), "forbidden content found in the artifact folder")
-    listing = subprocess.run(
-        [str(_archive_viewer()), "-r", str(bundle / CONSOLE_EXE)],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-    for module in REQUIRED_MODULES:
-        _require(module in listing, f"console archive misses module {module}")
+    viewer = _archive_viewer_command()
+    for executable in (CONSOLE_EXE, GUI_EXE):
+        listing = _capture([*viewer, "-r", str(bundle / executable)])
+        for module in REQUIRED_MODULES:
+            _require(module in listing, f"{executable} archive misses module {module}")
     print("artifact check passed")
     return 0
 
@@ -373,17 +464,26 @@ def cmd_smoke_install(args: argparse.Namespace) -> int:
     _run([console, "--data-dir", str(data_dir), "documents"])
     _require((data_dir / "state.sqlite3").is_file(), "documents did not initialize local state")
     probe = subprocess.run([str(console), "desktop"], capture_output=True, text=True, timeout=120)
-    _require(probe.returncode == 1, "desktop probe did not fail without credentials")
-    _require("Desktop" in probe.stderr, "desktop probe did not report the German failure")
+    _require(
+        desktop_probe_is_credential_failure(probe.returncode, probe.stderr),
+        "desktop probe did not report the console credential failure",
+    )
     _require(data_dir_is_external(data_dir, install_dir), "user data is inside the install directory")
 
+    install_path = str(install_dir).lower()
     _run([install_dir / "unins000.exe", *SILENT_FLAGS])
-    _require(not install_dir.exists(), "install directory survived the silent uninstall")
     _require(
-        str(install_dir).lower() not in _read_user_path(winreg).lower(),
+        _wait_until(lambda: not install_dir.exists()),
+        "install directory survived the silent uninstall",
+    )
+    _require(
+        _wait_until(lambda: install_path not in _read_user_path(winreg).lower()),
         "per-user PATH entry survived the silent uninstall",
     )
-    _require(not link.exists(), "start menu shortcut survived the silent uninstall")
+    _require(
+        _wait_until(lambda: not link.exists()),
+        "start menu shortcut survived the silent uninstall",
+    )
     _require((data_dir / "state.sqlite3").is_file(), "uninstall removed the preserved user data")
 
     shutil.rmtree(data_dir, ignore_errors=True)

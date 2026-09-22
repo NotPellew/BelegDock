@@ -81,21 +81,24 @@ upload or ordinary file write; recovery across these boundaries needs tests.
 
 ## 7. Deployment view
 
-Start with an installable Python package. Standalone executables may follow.
-Verify installation and the built CLI on Windows and Linux. User data, credentials,
-and host-specific development permissions are separate from repository contents.
-The package targets Python 3.12+; CI checks Python 3.12/3.14 on Ubuntu and Windows.
+Start with an installable Python package; the Windows pilot additionally ships the
+frozen distribution described below. Verify installation and the built CLI on
+Windows and Linux. User data, credentials, and host-specific development
+permissions are separate from repository contents. The package targets Python
+3.12+; CI checks Python 3.12/3.14 on Ubuntu and Windows.
 
 The Windows pilot also ships as a frozen PyInstaller onedir bundle inside a
-per-user Inno Setup installer (`PrivilegesRequired=lowest`) built from the built
-wheel. The installer adds the install directory to the per-user PATH and creates a
-Start Menu shortcut; uninstalling removes both without touching
-`%LOCALAPPDATA%\BelegDock`. The build runs only on Windows from a neutral work
-root (`C:\belegdock-build`), and `pyinstaller` is pinned in
-`packaging/build_windows.py` so `pyproject.toml` and `uv.lock` stay untouched. CI
-retains the setup executable and `artifact.json` (sha256, size, wheel hash, tool
-versions, git revision) as a 90-day workflow artifact; there is no GitHub Release
-and no code signing. The real window launch stays a manual native Windows check.
+per-user Inno Setup installer (`PrivilegesRequired=lowest`, `x64os`, Windows
+10 22H2 or later) built from the built wheel. The installer adds the install
+directory to the per-user PATH and creates a Start Menu shortcut; uninstalling
+removes both without touching `%LOCALAPPDATA%\BelegDock`. The build runs only on
+Windows from a neutral work root (`C:\belegdock-build`), installs the application
+dependencies from the frozen `uv.lock` with `uv export` and `--require-hashes`,
+and pins `pyinstaller` in `packaging/build_windows.py` so `pyproject.toml` and
+`uv.lock` stay untouched. CI retains the setup executable and `artifact.json`
+(sha256, size, wheel hash, resolved dependency versions, tool versions, git
+revision) as a 90-day workflow artifact; there is no GitHub Release and no code
+signing. The real window launch stays a manual native Windows check.
 
 Developer isolation currently requires Linux and Bubblewrap; native Windows
 fails explicitly. This limitation does not change the application's platform
@@ -214,10 +217,17 @@ and host sockets are not. The session gets a temporary home and /tmp.
   custom application icon. PyInstaller may embed build-machine source paths, so the
   build uses the neutral work root `C:\belegdock-build` and the artifact check
   scans for user-profile patterns; that reduces but does not prove the absence of
-  embedded paths. Per-user PATH editing is the most fragile installer step and is
-  asserted during the smoke installation. arm64 and Windows versions before
-  10 22H2 are unsupported. PyInstaller support for the CI Python versions
-  (3.12/3.14) must be rechecked when the pinned version or the toolchain changes.
+  embedded paths. The artifact check verifies the Tcl/Tk data directories
+  (`_tcl_data`/`_tk_data`), the Tk extension, the certifi CA bundle and the frozen
+  modules in both executables; it cannot prove that a Tk window initializes.
+  Per-user PATH editing is the most fragile installer step and is
+  asserted during the smoke installation, which waits for the asynchronous Inno
+  uninstaller before checking removal. ARM64 and Windows versions before 10 22H2
+  are unsupported and refused by `ArchitecturesAllowed=x64os`. PyInstaller support
+  for the CI Python versions (3.12/3.14) must be rechecked when the pinned version
+  or the toolchain changes. Freezing succeeds only on Windows; until a
+  `windows-installer` run exists, the spec, the bundle layout and the Inno
+  invocation are unverified.
 - The cleanup policy and the backup/restore behavior still need a user-facing
   decision; the supported Windows versions are now fixed for the pilot installer.
 

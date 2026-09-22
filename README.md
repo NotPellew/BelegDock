@@ -170,12 +170,14 @@ Installationsverzeichnis, PATH-Eintrag und Startmenü-Verknüpfung werden entfer
 dieses Verzeichnis bewusst selbst löschen.
 
 Unterstützt sind Windows 10 22H2 (10.0.19045) und Windows 11, nur x64; ARM64 und
-ältere Windows-Versionen sind nicht unterstützt. Die Anleitung für den Pilot
-liegt dem Paket als `README-Windows.txt` bei. Das Paket enthält kein eigenes
+ältere Windows-Versionen lehnt der Installer ab. Die Anleitung für den Pilot liegt
+dem Paket als `README-Windows.txt` bei. Das Paket enthält kein eigenes
 Anwendungssymbol und ist nicht signiert. Die Offline-Paketprüfung testet weder
-Gmail- noch Lexware-Konnektivität; ein separater Windows-Test des installierten
-Pakets bestand mit Windows Credential Manager, dem Live-Scannen und Vorbereiten
-in Gmail sowie dem Senden und der Ablehnungsbehandlung in Lexware.
+Gmail- noch Lexware-Konnektivität; ein separater Windows-Test des gebauten
+Python-Pakets bestand mit Windows Credential Manager, dem Live-Scannen und
+Vorbereiten in Gmail sowie dem Senden und der Ablehnungsbehandlung in Lexware.
+Dieser gefrorene Installer wurde noch nicht live gegen Gmail und Lexware geprüft;
+dafür ist ein eigener Pilotlauf mit Testkonto und Testdaten nötig.
 
 ## Entwicklung
 
