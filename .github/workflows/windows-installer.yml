@@ -1,0 +1,47 @@
+name: windows-installer
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and smoke install
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Install development tools
+        run: uv sync --locked
+      - name: Build wheel
+        run: uv build --wheel
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist\*.whl | Select-Object -First 1).FullName
+          uv run --no-sync python packaging/build_windows.py build --wheel $wheel --dist dist\windows
+      - name: Check artifact
+        shell: pwsh
+        run: uv run --no-sync python packaging/build_windows.py check-artifact --dist dist\windows
+      - name: Smoke install
+        shell: pwsh
+        run: uv run --no-sync python packaging/build_windows.py smoke-install --dist dist\windows
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/windows/
+          if-no-files-found: error
+          retention-days: 90

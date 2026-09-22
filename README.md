@@ -137,26 +137,47 @@ löschen, um einen erneuten Versuch zu erzwingen; ein erneuter Versuch nach eine
 unklaren Ergebnis bleibt zurückgestellt, weil dieser begrenzte Ablauf das Fehlen
 auf der Remote-Seite nicht beweisen kann.
 
-Für die vom Benutzer auszuführende Windows-Paketprüfung das aktuelle
-`dist/belegdock-0.1.0.dev0-py3-none-any.whl` nach Windows kopieren und PowerShell
-verwenden:
+## Windows-Installation (Pilot)
 
-```powershell
-$wheel = "$env:USERPROFILE\Downloads\belegdock-0.1.0.dev0-py3-none-any.whl"
-$environment = "$env:LOCALAPPDATA\BelegDock-test-env"
-$data = "$env:LOCALAPPDATA\BelegDock-test-data"
-py -3.12 -m venv $environment
-& "$environment\Scripts\python.exe" -m pip install $wheel
-& "$environment\Scripts\python.exe" -m belegdock --help
-& "$environment\Scripts\belegdock.exe" --data-dir $data documents
+Für den Firmen-Pilot steht eine fertige Windows-Installation ohne
+Administratorrechte bereit; ein Quellcheckout, `uv` oder eine eigene virtuelle
+Umgebung sind nicht nötig.
+
+1. `BelegDock-0.1.0.dev0-windows-x64-setup.exe` aus den CI-Artefakten des
+   `windows-installer`-Laufs herunterladen und die SHA-256-Prüfsumme mit
+   `artifact.json` vergleichen.
+2. Die Setup-Datei starten. Der deutsche Assistent installiert nach
+   `%LOCALAPPDATA%\Programs\BelegDock`, trägt das Verzeichnis in den
+   Benutzer-PATH ein und legt einen Startmenü-Eintrag „BelegDock“ an. Eine
+   Administratorabfrage entfällt; Windows SmartScreen warnt, weil das Paket
+   nicht signiert ist.
+3. In einer neuen Eingabeaufforderung einmalig anmelden:
+
+```sh
+belegdock login-gmail --client C:\Pfad\zum\client.json
+belegdock login-lexware
 ```
 
-Danach die obigen Anweisungen zur Verbindung, Auswahl und Wiederherstellung für
-einen Kontotest befolgen. Anmeldedaten oder lokalen Zustand nicht über Git übertragen.
-Die Paketprüfung selbst testet weder Gmail- noch Lexware-Konnektivität; ein separater
-Windows-Test des installierten Pakets bestand mit Windows Credential Manager, dem
-Live-Scannen und Vorbereiten in Gmail sowie dem Senden und der Ablehnungsbehandlung
-in Lexware.
+4. Über das Startmenü „BelegDock“ oder mit `belegdock desktop` starten.
+
+Daten liegen unter `%LOCALAPPDATA%\BelegDock` mit `state.sqlite3` und `blobs/`
+außerhalb der Installation; sie bleiben bei einem Upgrade und bei der
+Deinstallation erhalten. Zum Aktualisieren die neuere Setup-Datei über die
+vorhandene Installation ausführen und danach einmal `belegdock documents`
+starten. Zum Deinstallieren „BelegDock“ in „Apps und Features“ auswählen;
+Installationsverzeichnis, PATH-Eintrag und Startmenü-Verknüpfung werden entfernt,
+`%LOCALAPPDATA%\BelegDock` wird nicht gelöscht. Für die endgültige Entfernung
+dieses Verzeichnis bewusst selbst löschen.
+
+Unterstützt sind Windows 10 22H2 (10.0.19045) und Windows 11, nur x64; ARM64 und
+ältere Windows-Versionen lehnt der Installer ab. Die Anleitung für den Pilot liegt
+dem Paket als `README-Windows.txt` bei. Das Paket enthält kein eigenes
+Anwendungssymbol und ist nicht signiert. Die Offline-Paketprüfung testet weder
+Gmail- noch Lexware-Konnektivität; ein separater Windows-Test des gebauten
+Python-Pakets bestand mit Windows Credential Manager, dem Live-Scannen und
+Vorbereiten in Gmail sowie dem Senden und der Ablehnungsbehandlung in Lexware.
+Dieser gefrorene Installer wurde noch nicht live gegen Gmail und Lexware geprüft;
+dafür ist ein eigener Pilotlauf mit Testkonto und Testdaten nötig.
 
 ## Entwicklung
 
