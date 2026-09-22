@@ -53,6 +53,7 @@ TEXT_SUFFIXES = {
     ".ps1",
     ".sh",
 }
+FORBIDDEN_TEXT_EXCLUDED_PARTS = {"_internal"}
 
 REQUIRED_BUNDLE_ENTRIES = ("_tkinter.pyd", "_tcl_data", "_tk_data", CONSOLE_EXE, GUI_EXE)
 REQUIRED_BUNDLE_FILES = ("certifi/cacert.pem",)
@@ -151,7 +152,11 @@ def forbidden_entries(root: Path) -> list[str]:
         if any(pattern.match(name) for pattern in FORBIDDEN_NAME_PATTERNS):
             findings.add(relative.as_posix())
             continue
-        if path.is_file() and path.suffix.lower() in TEXT_SUFFIXES:
+        if (
+            path.is_file()
+            and path.suffix.lower() in TEXT_SUFFIXES
+            and not set(relative.parts) & FORBIDDEN_TEXT_EXCLUDED_PARTS
+        ):
             text = _read_text(path)
             if any(pattern.search(text) for pattern in FORBIDDEN_TEXT_PATTERNS):
                 findings.add(relative.as_posix())
@@ -402,7 +407,8 @@ def cmd_check_artifact(args: argparse.Namespace) -> int:
             _find_bundle_entry(bundle, entry) is not None,
             f"bundle misses {entry}",
         )
-    _require(not forbidden_entries(dist), "forbidden content found in the artifact folder")
+    findings = forbidden_entries(dist)
+    _require(not findings, f"forbidden content found in the artifact folder: {findings}")
     viewer = _archive_viewer_command()
     for executable in (CONSOLE_EXE, GUI_EXE):
         listing = _capture([*viewer, "-r", str(bundle / executable)])

@@ -220,7 +220,11 @@ and host sockets are not. The session gets a temporary home and /tmp.
   scans for user-profile patterns; that reduces but does not prove the absence of
   embedded paths. The artifact check verifies the Tcl/Tk data directories
   (`_tcl_data`/`_tk_data`), the Tk extension, the certifi CA bundle and the frozen
-  modules in both executables; it cannot prove that a Tk window initializes.
+  modules in both executables; it cannot prove that a Tk window initializes. The
+  text path scan skips PyInstaller's `_internal` contents directory, because its
+  bundled third-party data (for example the Google API schema documents) contains
+  incidental `/home/...` example strings; the name, suffix and directory rules
+  still apply there.
   Per-user PATH editing is the most fragile installer step and is
   asserted during the smoke installation, which waits for the asynchronous Inno
   uninstaller before checking removal. ARM64 and Windows versions before 10 22H2
