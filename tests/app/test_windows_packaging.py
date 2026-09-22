@@ -54,7 +54,7 @@ class WindowsPackagingTests(unittest.TestCase):
         self.assertIn("PrivilegesRequired=lowest", text)
         self.assertIn("DefaultDirName={localappdata}\\Programs\\BelegDock", text)
         self.assertIn("MinVersion=10.0.19045", text)
-        self.assertIn("ArchitecturesAllowed=x64compatible", text)
+        self.assertIn("ArchitecturesAllowed=x64os", text)
         self.assertIn("OutputBaseFilename=BelegDock-{#AppVersion}-windows-x64-setup", text)
         self.assertIn("VersionInfoVersion={#VersionInfo}", text)
         self.assertNotRegex(text, r"VersionInfoVersion=\d")
