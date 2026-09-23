@@ -30,8 +30,8 @@ jobs:
         run: uv sync --locked
       - name: Run application tests
         run: uv run pytest tests/app -q
-      - name: Check source with Ruff
-        run: uv run ruff check src
+      - name: Check repository with Ruff
+        run: uv run ruff check .
       - name: Check source with mypy
         run: uv run mypy src
       - name: Build wheel

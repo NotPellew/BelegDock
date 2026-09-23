@@ -38,7 +38,7 @@ GROUPS = (
     ("desktop_already_present", "c13c26ef4e71d8b1b65ed08efcc9016a518b280a", "test_desktop_already_present.py", 2, {"AssertionError"}),
     ("desktop_detail_reset", "06d0ed8aaf42a01f576365b368f6fd062f011d66", "test_desktop_detail_reset.py", 1, {"AssertionError"}),
     ("desktop_integrity", "98dc704b5567c14ac509a4d1fe5e794d7d656c98", "test_desktop_integrity.py", 1, {"AssertionError"}),
-    ("desktop_layout_states", "e72509c6ae827c394acb4d39aeeedd2bcdc0bce5", "test_desktop_layout_states.py", 2, {"AssertionError"}),
+    ("desktop_layout_states", "8cbd5911c035c0b6d2cd19af6b232931d15716b5", "test_desktop_layout_states.py", 2, {"AssertionError"}),
     ("desktop_states", "316a37320075b6135d59e782d98e06c75c11c7f7", "test_desktop_states.py", 2, {"AssertionError"}),
     ("desktop_ui_polish", "fe283fc6f5ad8b74592e4f6f965ebe7a71594b28", "test_desktop_ui_polish.py", 3, {"AssertionError"}),
     ("restore_integrity", "7bf3d5ac2a4ec52d7acdd09349bca4f81f546941", "test_restore_integrity.py", 2, {"AssertionError"}),

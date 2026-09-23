@@ -119,7 +119,7 @@ Development uses uv with an environment outside the checkout. For Linux:
 export UV_PROJECT_ENVIRONMENT=/tmp/belegdock-dev
 uv sync --locked
 uv run pytest tests/app -q
-uv run ruff check src
+uv run ruff check .
 uv run mypy src
 uv run python -m unittest discover -s tests/evidence -v
 uv build --wheel
