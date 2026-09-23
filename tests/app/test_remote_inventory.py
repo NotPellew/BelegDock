@@ -115,8 +115,12 @@ class RemoteInventoryTests(unittest.TestCase):
             store = Store(Path(temporary))
             digest = store.stage("acct", "msg", "part", "receipt.pdf", b"receipt")
             events = []
-            refresh = lambda: events.append("refresh")
-            uploader = lambda data, filename: events.append("post") or {"id": "file-2", "voucherId": "voucher-2"}
+            def refresh():
+                events.append("refresh")
+
+            def uploader(data, filename):
+                events.append("post")
+                return {"id": "file-2", "voucherId": "voucher-2"}
             self.assertIn("refresh", inspect.signature(store.upload).parameters)
             inspect.signature(store.upload).bind(digest, uploader, refresh=refresh)
             result = store.upload(

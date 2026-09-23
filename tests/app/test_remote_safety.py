@@ -37,7 +37,7 @@ class RemoteSafetyTests(unittest.TestCase):
 
         api = API(handler)
         with tempfile.TemporaryDirectory() as temporary:
-            store = Store(Path(temporary))
+            Store(Path(temporary))
             with self.assertRaises((ValueError, RuntimeError)):
                 LexwareAdapter(client_for(api)).inventory(include_archived=True)
 
