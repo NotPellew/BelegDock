@@ -21,7 +21,7 @@ class DesktopLayoutAndActionStateTests(unittest.TestCase):
         self.assertTrue(hasattr(desktop.DesktopApplication, "_layout_sections"))
         if not hasattr(desktop.DesktopApplication, "_layout_sections"):
             return
-        app = DesktopApplication = desktop.DesktopApplication.__new__(desktop.DesktopApplication)
+        app = desktop.DesktopApplication.__new__(desktop.DesktopApplication)
         app.sections = Widget()
         app.choose_section = Widget()
         app.review_section = Widget()
