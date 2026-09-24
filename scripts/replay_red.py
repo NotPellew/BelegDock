@@ -58,6 +58,7 @@ GROUPS = (
     ("scan_classification", "da035b9c7c061e77d3dedc37f8a651346cf10a45", "test_scan_classifier.py", 10, {"AssertionError"}),
     ("scan_classification_review", "eb25ed2e36f3650a6e3e73d0f0c69d8d0896923c", "test_scan_classifier_review.py", 4, {"AssertionError"}),
     ("scan_classification_final", "6c9ae0c68b13eebc950d65d5d09eca161ffca467", "test_scan_classifier_final.py", 2, {"AssertionError"}),
+    ("scan_classification_layout", "0cbbb98164126c34e395cc0b283a8dead41c2cf3", "test_scan_classifier_layout.py", 1, {"AssertionError"}),
 )
 
 
