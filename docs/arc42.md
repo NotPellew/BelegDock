@@ -137,11 +137,13 @@ and host sockets are not. The session gets a temporary home and /tmp.
 - SHA-256 identifies byte-identical documents. Keep separate source occurrences;
   do not claim detection of semantically identical invoices with different bytes.
 - Scan classification is a pure, offline rules pass over the filename plus bounded
-  Subject and From values. It emits fixed explanatory signals, never the raw
-  headers. German and English terms have equal weight; contradictory types become
-  `unknown`/`unclear`, sender-only evidence remains advisory, and the message date
-  does not infer document type. The result prioritizes review but never filters,
-  selects, validates, or uploads a candidate.
+  Subject and From values. MIME/extension establish PDF/XML candidacy but not a
+  document type, and the message date does not infer one. The classifier emits
+  fixed explanatory signals, never raw headers. German and English terms have equal
+  weight; contradictory types become `unknown`/`unclear`, sender-only evidence
+  remains advisory, and a stale optional classification falls back to the filename.
+  The result prioritizes review but never filters, selects, validates, or uploads a
+  candidate.
 - Staging survives interruptions until an upload can be resolved. Optional
   retention of original attachments follows reliable staging/upload. No automatic
   deletion policy is agreed. Defer original-email (.eml) retention and search.

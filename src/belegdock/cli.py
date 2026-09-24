@@ -226,15 +226,7 @@ def dispatch(args: argparse.Namespace) -> Any:
         account, gmail = gmail_client()
         candidates = gmail.candidates(args.label)
         if args.command == "scan":
-            classified = (classify_candidate_mapping(gmail, candidate) for candidate in candidates)
-            return [
-                {
-                    key: value
-                    for key, value in candidate.items()
-                    if key not in ("inline_data", "attachment_id")
-                }
-                for candidate in classified
-            ]
+            return [classify_candidate_mapping(gmail, candidate) for candidate in candidates]
         selected = set(args.select)
         if selected - {item["id"] for item in candidates}:
             raise ValueError("Unknown selection; scan the label again.")
