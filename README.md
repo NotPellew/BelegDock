@@ -231,8 +231,8 @@ Zustellstatus wird in einem Zustellnachweis außerhalb des Checkouts
 dokumentiert. Die Statuswerte unterscheiden zwischen `send_rejected`
 (definitiv nicht gesendet), `send_uncertain` (Remote-Ergebnis unbekannt) und
 `sent_label_unknown` (gesendet, Label-Ergebnis unbekannt). Ein bereits
-vorhandener Zustellnachweis sperrt weitere Zustellversuche für denselben
-Batch.
+Ein kanonischer Claim im Batch-Verzeichnis sperrt weitere Zustellversuche
+für denselben Batch, auch wenn ein anderer Zustellnachweis-Pfad angegeben wird.
 
 Die Werkzeuge erzeugen und versenden nur Testdaten. Sie führen keinen
 Lexware-Upload und keine Wiederherstellung aus. ZUGFeRD-Dokumente sind in der

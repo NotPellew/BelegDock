@@ -254,26 +254,17 @@ class PilotFixtureSenderTests(unittest.TestCase):
     def test_read_manifest_rejects_unbound_synthetic_content(self):
         module = self.load_module()
         with tempfile.TemporaryDirectory() as temporary:
-            batch = Path(temporary) / "unbound"
-            batch.mkdir()
-            payload = b"not a generated fixture"
-            (batch / "accepted-001.pdf").write_bytes(payload)
-            manifest = {
-                "schemaVersion": 1,
-                "runId": "pilot-001",
-                "documents": [
-                    {
-                        "file": "accepted-001.pdf",
-                        "role": "accepted",
-                        "expected": "accept",
-                        "size": len(payload),
-                        "sha256": hashlib.sha256(payload).hexdigest(),
-                    }
-                ],
-            }
-            (batch / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            manifest_path = self.make_batch(Path(temporary))
+            payload = b"%PDF-1.4\r\nsynthetic but not trusted\r\n%%EOF\r\n"
+            (manifest_path.parent / "accepted-001.pdf").write_bytes(payload)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for entry in manifest["documents"]:
+                if entry["file"] == "accepted-001.pdf":
+                    entry["size"] = len(payload)
+                    entry["sha256"] = hashlib.sha256(payload).hexdigest()
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             with self.assertRaises(module.PilotMailError):
-                module.read_manifest(batch / "manifest.json")
+                module.read_manifest(manifest_path)
 
     def test_mime_uses_bytes_validated_before_later_file_changes(self):
         module = self.load_module()
@@ -310,6 +301,33 @@ class PilotFixtureSenderTests(unittest.TestCase):
             self.assertEqual(receipt["outcome"], "send_rejected")
             self.assertEqual(receipt["remoteState"], "not_sent")
             self.assertEqual(receipt["httpStatus"], 400)
+    def test_alternate_receipt_path_cannot_bypass_batch_claim(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = self.make_batch(Path(temporary))
+            messages = Messages()
+            service = Service(messages)
+            first_receipt = Path(temporary) / "first-receipt.json"
+            second_receipt = Path(temporary) / "second-receipt.json"
+            module.send_batch(
+                manifest,
+                expected_account="pilot@example.test",
+                label="BelegDock-Pilot",
+                execute=True,
+                service=service,
+                receipt_path=first_receipt,
+            )
+            with self.assertRaises(module.PilotMailError):
+                module.send_batch(
+                    manifest,
+                    expected_account="pilot@example.test",
+                    label="BelegDock-Pilot",
+                    execute=True,
+                    service=service,
+                    receipt_path=second_receipt,
+                )
+            self.assertEqual(len(messages.send_calls), 1)
+
     def test_receipt_claim_is_exclusive_and_updates_are_atomic(self):
         module = self.load_module()
         self.assertTrue(hasattr(module, "os"))

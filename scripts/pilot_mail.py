@@ -231,6 +231,22 @@ def _receipt_bytes(receipt: dict[str, Any]) -> bytes:
     return (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def _fsync_parent(path: Path) -> None:
+    if sys.platform == "win32":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(path.parent, flags)
+    except OSError as error:
+        raise PilotMailError("could not open delivery receipt directory") from error
+    try:
+        os.fsync(descriptor)
+    except OSError as error:
+        raise PilotMailError("could not sync delivery receipt directory") from error
+    finally:
+        os.close(descriptor)
+
+
 def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
     resolved = _external_path(path)
     resolved.parent.mkdir(parents=True, exist_ok=True)
@@ -246,6 +262,7 @@ def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
                 raise OSError("receipt write made no progress")
             view = view[written:]
         os.fsync(descriptor)
+        _fsync_parent(resolved)
     except FileExistsError as error:
         raise PilotMailError(f"delivery receipt already exists: {resolved}") from error
     except OSError as error:
@@ -273,6 +290,7 @@ def _replace_receipt(path: Path, receipt: dict[str, Any]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, resolved)
+        _fsync_parent(resolved)
     except OSError as error:
         raise PilotMailError("could not update delivery receipt") from error
     finally:
@@ -323,6 +341,17 @@ def send_batch(
         "messageId": None,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    claim_file = Path(manifest["_batchDir"]) / ".delivery-claim.json"
+    if receipt_file.resolve() == claim_file.resolve():
+        raise PilotMailError("delivery receipt cannot replace the canonical batch claim")
+    _write_receipt(
+        claim_file,
+        {
+            "runId": manifest["runId"],
+            "manifestSha256": manifest["_manifestSha256"],
+            "claimedAt": receipt["timestamp"],
+        },
+    )
     _write_receipt(receipt_file, receipt)
     users = service.users()
     messages_resource = users.messages
