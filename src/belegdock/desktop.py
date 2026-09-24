@@ -485,13 +485,13 @@ class DesktopApplication:
         for column, heading in headings.items():
             view.heading(column, text=heading)
         if "filename" in columns:
-            view.column("filename", width=260, minwidth=160, stretch=True, anchor="w")
+            view.column("filename", width=200, minwidth=120, stretch=True, anchor="w")
         if "document_type" in columns:
-            view.column("document_type", width=120, minwidth=100, stretch=False, anchor="w")
+            view.column("document_type", width=90, minwidth=80, stretch=False, anchor="w")
         if "recommendation" in columns:
-            view.column("recommendation", width=130, minwidth=110, stretch=False, anchor="w")
+            view.column("recommendation", width=100, minwidth=90, stretch=False, anchor="w")
         if "size" in columns:
-            view.column("size", width=110, minwidth=80, stretch=False, anchor="e")
+            view.column("size", width=80, minwidth=70, stretch=False, anchor="e")
         view.grid(row=0, column=0, sticky="nsew")
         vertical = self.ttk.Scrollbar(container, orient="vertical", command=view.yview)
         vertical.grid(row=0, column=1, sticky="ns")
