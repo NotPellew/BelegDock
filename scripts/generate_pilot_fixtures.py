@@ -302,16 +302,22 @@ def _validate_batch(
     documents = manifest.get("documents")
     if not isinstance(documents, list) or not documents:
         raise FixtureError("fixture manifest has no documents")
-    if len({entry.get("file") for entry in documents if isinstance(entry, dict)}) != len(documents):
+    if any(
+        not isinstance(entry, dict) or not isinstance(entry.get("file"), str)
+        for entry in documents
+    ):
+        raise FixtureError("fixture manifest filename is invalid")
+    if len({entry["file"] for entry in documents}) != len(documents):
         raise FixtureError("fixture manifest has duplicate filenames")
-    validated_with_data = [_validate_manifest_entry(batch, entry) for entry in documents]
-    validated = [entry for entry, _ in validated_with_data]
-    actual_files = {entry["file"]: data for entry, data in validated_with_data}
     metadata, expected_files = _expected_files(run_id, template_dir)
     if manifest.get("templateVersion") != metadata["version"]:
         raise FixtureError("fixture manifest template version is invalid")
-    if set(actual_files) != set(expected_files):
+    manifest_filenames = {entry["file"] for entry in documents}
+    if manifest_filenames != set(expected_files) or len(documents) != len(expected_files):
         raise FixtureError("fixture manifest does not contain the generated fixture set")
+    validated_with_data = [_validate_manifest_entry(batch, entry) for entry in documents]
+    validated = [entry for entry, _ in validated_with_data]
+    actual_files = {entry["file"]: data for entry, data in validated_with_data}
     for filename, expected_data in expected_files.items():
         if actual_files[filename] != expected_data:
             raise FixtureError(f"fixture bytes do not match the trusted template batch: {filename}")

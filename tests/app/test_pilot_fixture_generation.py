@@ -101,6 +101,26 @@ class PilotFixtureGenerationTests(unittest.TestCase):
             with self.assertRaises(module.FixtureError):
                 module.validate_batch(output)
 
+    def test_unknown_manifest_files_are_rejected_before_opening(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "batch"
+            module.generate_batch(output, "pilot-001")
+            manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+            manifest["documents"] = [
+                {
+                    "file": f"unknown-{index}.pdf",
+                    "role": "accepted",
+                    "expected": "accept",
+                    "size": 0,
+                    "sha256": "0" * 64,
+                }
+                for index in range(1000)
+            ]
+            (output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(module.FixtureError, "generated fixture set"):
+                module.validate_batch(output)
+
     def test_validate_rejects_oversized_attachment_before_full_read(self):
         module = self.load_module()
         with tempfile.TemporaryDirectory() as temporary:
