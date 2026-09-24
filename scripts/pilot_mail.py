@@ -401,7 +401,20 @@ def send_batch(
     messages_resource = users.messages
     messages = messages_resource() if callable(messages_resource) else messages_resource
     try:
-        result = messages.send(userId="me", raw=encoded).execute()
+        request = messages.send(userId="me", body={"raw": encoded})
+    except Exception as error:
+        receipt["outcome"] = "send_failed"
+        receipt["remoteState"] = "not_sent"
+        _persist_receipt(
+            receipt_file,
+            receipt,
+            "Gmail send request could not be constructed; no message was sent",
+        )
+        raise PilotMailError(
+            "Gmail send request could not be constructed; no message was sent"
+        ) from error
+    try:
+        result = request.execute()
     except Exception as error:
         status = _http_status(error)
         if status is not None and 400 <= status < 500:

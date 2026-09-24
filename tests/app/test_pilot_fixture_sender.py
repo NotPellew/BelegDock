@@ -36,10 +36,13 @@ def load_generator():
 
 
 class Result:
-    def __init__(self, value):
+    def __init__(self, value, error=None):
         self.value = value
+        self.error = error
 
     def execute(self):
+        if self.error is not None:
+            raise self.error
         return self.value
 
 
@@ -53,9 +56,7 @@ class Messages:
 
     def send(self, **kwargs):
         self.send_calls.append(kwargs)
-        if self.send_error:
-            raise self.send_error
-        return Result({"id": "message-1"})
+        return Result({"id": "message-1"}, self.send_error)
 
     def modify(self, **kwargs):
         self.modify_calls.append(kwargs)
@@ -188,13 +189,16 @@ class PilotFixtureSenderTests(unittest.TestCase):
             )
             self.assertEqual(result["outcome"], "sent")
             self.assertEqual(len(messages.send_calls), 1)
+            self.assertEqual(set(messages.send_calls[0]), {"userId", "body"})
+            self.assertEqual(messages.send_calls[0]["userId"], "me")
+            self.assertIn("raw", messages.send_calls[0]["body"])
             self.assertEqual(len(messages.modify_calls), 1)
             self.assertEqual(messages.modify_calls[0]["id"], "message-1")
             self.assertEqual(messages.modify_calls[0]["body"], {"addLabelIds": ["Label_1"]})
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             self.assertEqual(receipt["outcome"], "sent")
             self.assertEqual(receipt["messageId"], "message-1")
-            raw = base64.urlsafe_b64decode(messages.send_calls[0]["raw"] + "===")
+            raw = base64.urlsafe_b64decode(messages.send_calls[0]["body"]["raw"] + "===")
             self.assertIn(b"accepted-001.pdf", raw)
 
     def test_unexpected_account_fails_before_sending(self):
