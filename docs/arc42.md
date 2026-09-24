@@ -137,8 +137,9 @@ and host sockets are not. The session gets a temporary home and /tmp.
 - SHA-256 identifies byte-identical documents. Keep separate source occurrences;
   do not claim detection of semantically identical invoices with different bytes.
 - Scan classification is a pure, offline rules pass over the filename plus bounded
-  Subject and From values. MIME/extension establish PDF/XML candidacy but not a
-  document type, and the message date does not infer one. The classifier emits
+  Subject and From values. The existing filename-extension gate establishes
+  PDF/XML candidacy; MIME metadata and the message date do not infer a document
+  type. The classifier emits
   fixed explanatory signals, never raw headers. German and English terms have equal
   weight; contradictory types become `unknown`/`unclear`, sender-only evidence
   remains advisory, and a stale optional classification falls back to the filename.
@@ -199,7 +200,8 @@ and host sockets are not. The session gets a temporary home and /tmp.
 - The initial Gmail adapter refuses malformed parts, including empty part IDs.
   Real account/provider edge cases remain to be established.
 - Fixed scan recommendations cover an explicit, small German/English token set.
-  They do not inspect PDF/XML content, infer from the message date, or establish
+  Candidate discovery remains filename-extension gated. Recommendations do not
+  inspect MIME metadata or PDF/XML content, infer from the message date, or establish
   invoice validity. Weak or conflicting metadata stays `unknown`; the separate
   opt-in local-model evaluation remains deferred.
 - HTTP 400/406 responses from the files endpoint are documented local rejections;

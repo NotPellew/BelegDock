@@ -50,7 +50,13 @@ _SENDER_TOKENS: Final[dict[DocumentType, tuple[str, ...]]] = {
         "accounting",
         "buchhaltung",
     ),
-    DOCUMENT_TYPE_CREDIT_NOTE: ("credit memo", "gutschrift", "storno"),
+    DOCUMENT_TYPE_CREDIT_NOTE: (
+        "credit memo",
+        "credit note",
+        "credit notes",
+        "gutschrift",
+        "storno",
+    ),
     DOCUMENT_TYPE_RECEIPT: ("receipt", "kassenbon", "quittung", "point of sale"),
 }
 _NON_DOCUMENT_TOKENS: Final = (
@@ -160,16 +166,21 @@ def classify_candidate(
     return CandidateClassification(DOCUMENT_TYPE_UNKNOWN, RECOMMENDATION_UNCLEAR, ())
 
 
+def _candidate_text(candidate: Mapping[str, Any], key: str) -> str:
+    value = candidate.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError("Gmail candidate metadata is invalid")
+    return value
+
+
 def lookup_candidate_classification(
     provider: Any, candidate: Mapping[str, Any]
 ) -> CandidateClassification:
     provider_type = type(provider)
     if not callable(getattr(provider_type, "candidate_classification", None)):
         return classify_candidate(candidate)
+    candidate_id = _candidate_text(candidate, "id")
     try:
-        candidate_id = candidate.get("id")
-        if not isinstance(candidate_id, str) or not candidate_id:
-            raise ValueError("Gmail candidate identity is invalid")
         result = provider.candidate_classification(candidate_id)
     except Exception:
         return classify_candidate(candidate)
@@ -181,11 +192,14 @@ def lookup_candidate_classification(
 def classify_candidate_mapping(
     provider: Any, candidate: Mapping[str, Any]
 ) -> dict[str, Any]:
+    size = candidate.get("size")
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        raise ValueError("Gmail candidate metadata is invalid")
     return {
-        "id": candidate["id"],
-        "message_id": candidate["message_id"],
-        "part_id": candidate["part_id"],
-        "filename": candidate["filename"],
-        "size": candidate["size"],
+        "id": _candidate_text(candidate, "id"),
+        "message_id": _candidate_text(candidate, "message_id"),
+        "part_id": _candidate_text(candidate, "part_id"),
+        "filename": _candidate_text(candidate, "filename"),
+        "size": size,
         **lookup_candidate_classification(provider, candidate).as_dict(),
     }

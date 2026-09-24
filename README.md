@@ -70,9 +70,9 @@ Jeder `scan`-Kandidat enthält zusätzlich `documentType`, `recommendation` und
 `signals`. Die Werte `invoice`, `credit_note`, `receipt` beziehungsweise `unknown`
 und `likely`, `unclear`, `unlikely` sind deterministische Hinweise aus Dateiname,
 Betreff und Absender. Sie helfen beim Priorisieren, prüfen aber weder Inhalt noch
-Rechnungsgültigkeit. Die MIME-Angabe bestätigt nur den unterstützten
-PDF/XML-Kandidatentyp; das E-Mail-Datum liefert keinen Belegtyp. Alle Kandidaten
-bleiben sichtbar und müssen weiterhin ausdrücklich ausgewählt werden. Betreff und
+Rechnungsgültigkeit. Die Kandidatenerkennung bleibt an die PDF/XML-Dateiendung
+gebunden; MIME- und Datumsangaben liefern keinen Belegtyp. Alle Kandidaten bleiben
+sichtbar und müssen weiterhin ausdrücklich ausgewählt werden. Betreff und
 Absender werden nur während des Scans für feste Signaltexte ausgewertet, nicht in
 SQLite gespeichert und nicht ausgegeben.
 
