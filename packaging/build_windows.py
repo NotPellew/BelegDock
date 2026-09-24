@@ -35,7 +35,7 @@ FORBIDDEN_NAME_PATTERNS = (
     re.compile(r"^test_.*\.py$", re.IGNORECASE),
 )
 FORBIDDEN_TEXT_PATTERNS = (
-    re.compile(r"C:\\Users\\", re.IGNORECASE),
+    re.compile(r"C:\\+Users\\+", re.IGNORECASE),
     re.compile(r"/home/[A-Za-z0-9._-]+/"),
 )
 TEXT_SUFFIXES = {
@@ -53,7 +53,25 @@ TEXT_SUFFIXES = {
     ".ps1",
     ".sh",
 }
-FORBIDDEN_TEXT_EXCLUDED_PARTS = {"_internal"}
+GOOGLE_DISCOVERY_DOCUMENTS = "_internal/googleapiclient/discovery_cache/documents"
+KNOWN_INCIDENTAL_TEXT = {
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/cloudidentity.v1.json": (
+        r"C:\\Users\\%USERPROFILE%\\.secureConnect\\context_aware_config.json",
+    ),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/cloudidentity.v1beta1.json": (
+        r"C:\\Users\\%USERPROFILE%\\.secureConnect\\context_aware_config.json",
+    ),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/dataproc.v1.json": (
+        "file:///home/usr/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar",
+        "/home/usr/bin",
+    ),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/dataproc.v1beta2.json": (
+        "file:///home/usr/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar",
+    ),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/homegraph.v1.json": (
+        "cs//depot/google3/home/homeservicelayer/uddm/types/uddm_device_types.proto",
+    ),
+}
 
 REQUIRED_BUNDLE_ENTRIES = ("_tkinter.pyd", "_tcl_data", "_tk_data", CONSOLE_EXE, GUI_EXE)
 REQUIRED_BUNDLE_FILES = ("certifi/cacert.pem",)
@@ -123,11 +141,29 @@ def build_manifest(
     }
 
 
-def _read_text(path: Path) -> str:
+def _read_text(path: Path) -> str | None:
     try:
         return path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
-        return ""
+        return None
+
+
+def _remove_complete_known_text(text: str, known_text: str) -> str:
+    pattern = re.compile(
+        r"(?<![A-Za-z0-9._%/\\+:=@?#~-])"
+        + re.escape(known_text)
+        + r"(?=\\['\"]|$|[\s,'\")\]}])"
+    )
+    return pattern.sub("", text)
+
+
+def _without_known_incidental_text(relative: Path, text: str) -> str:
+    normalized = relative
+    if relative.parts and relative.parts[0] == BUNDLE_NAME:
+        normalized = Path(*relative.parts[1:])
+    for known_text in KNOWN_INCIDENTAL_TEXT.get(normalized.as_posix(), ()):
+        text = _remove_complete_known_text(text, known_text)
+    return text
 
 
 def _is_public_ca_bundle(path: Path) -> bool:
@@ -152,12 +188,12 @@ def forbidden_entries(root: Path) -> list[str]:
         if any(pattern.match(name) for pattern in FORBIDDEN_NAME_PATTERNS):
             findings.add(relative.as_posix())
             continue
-        if (
-            path.is_file()
-            and path.suffix.lower() in TEXT_SUFFIXES
-            and not set(relative.parts) & FORBIDDEN_TEXT_EXCLUDED_PARTS
-        ):
+        if path.is_file() and path.suffix.lower() in TEXT_SUFFIXES:
             text = _read_text(path)
+            if text is None:
+                findings.add(relative.as_posix())
+                continue
+            text = _without_known_incidental_text(relative, text)
             if any(pattern.search(text) for pattern in FORBIDDEN_TEXT_PATTERNS):
                 findings.add(relative.as_posix())
     return sorted(findings)

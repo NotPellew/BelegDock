@@ -243,10 +243,21 @@ and host sockets are not. The session gets a temporary home and /tmp.
   embedded paths. The artifact check verifies the Tcl/Tk data directories
   (`_tcl_data`/`_tk_data`), the Tk extension, the certifi CA bundle and the frozen
   modules in both executables; it cannot prove that a Tk window initializes. The
-  text path scan skips PyInstaller's `_internal` contents directory, because its
-  bundled third-party data (for example the Google API schema documents) contains
-  incidental `/home/...` example strings; the name, suffix and directory rules
-  still apply there.
+  text path scan covers PyInstaller's `_internal` runtime data. An inventory of
+  the native-Windows bundle found incidental user-profile examples only in
+  `cloudidentity.v1.json`, `cloudidentity.v1beta1.json`, `dataproc.v1.json`,
+  `dataproc.v1beta2.json`, and `homegraph.v1.json` under
+  `googleapiclient/discovery_cache/documents`. The scanner removes only the
+  path-scoped `%USERPROFILE%\\.secureConnect` example from the two Cloud Identity
+  documents, the complete Hadoop example URI in both Dataproc documents, and the
+  exact Homegraph `homeservicelayer` example. For the existing synthetic regression,
+  it also permits the exact `/home/usr/bin` value in Dataproc v1; that value is not
+  part of the native-bundle inventory. Exceptions match complete values, so child
+  paths and suffixed forms still fail. An unreadable runtime text file also fails
+  the check. The filename, suffix, state, test, and private-key rules apply
+  throughout. This scan
+  does not inspect arbitrary binary data or prove that runtime data cannot contain
+  sensitive strings.
   Per-user PATH editing is the most fragile installer step and is
   asserted during the smoke installation, which waits for the asynchronous Inno
   uninstaller before checking removal. ARM64 and Windows versions before 10 22H2
