@@ -291,6 +291,15 @@ def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
             os.close(descriptor)
 
 
+def _remove_receipt_if_present(path: Path) -> None:
+    try:
+        _external_path(path).unlink()
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise PilotMailError("could not clean up unclaimed delivery receipt") from error
+
+
 def _replace_receipt(path: Path, receipt: dict[str, Any]) -> None:
     resolved = _external_path(path)
     descriptor = -1
@@ -375,15 +384,19 @@ def send_batch(
     claim_file = Path(manifest["_batchDir"]) / ".delivery-claim.json"
     if receipt_file.resolve() == claim_file.resolve():
         raise PilotMailError("delivery receipt cannot replace the canonical batch claim")
-    _write_receipt(
-        claim_file,
-        {
-            "runId": manifest["runId"],
-            "manifestSha256": manifest["_manifestSha256"],
-            "claimedAt": receipt["timestamp"],
-        },
-    )
     _write_receipt(receipt_file, receipt)
+    try:
+        _write_receipt(
+            claim_file,
+            {
+                "runId": manifest["runId"],
+                "manifestSha256": manifest["_manifestSha256"],
+                "claimedAt": receipt["timestamp"],
+            },
+        )
+    except PilotMailError:
+        _remove_receipt_if_present(receipt_file)
+        raise
     users = service.users()
     messages_resource = users.messages
     messages = messages_resource() if callable(messages_resource) else messages_resource

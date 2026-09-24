@@ -97,7 +97,8 @@ def _load_template(template_dir: Path, metadata: dict[str, Any], name: str) -> b
     path = _path_without_symlink_components(template_dir / name)
     _regular_file(path)
     try:
-        data = path.read_bytes()
+        with path.open("rb") as handle:
+            data = handle.read(MAX_FILE_SIZE + 1)
     except OSError as error:
         raise FixtureError(f"template cannot be read: {name}") from error
     if len(data) > MAX_FILE_SIZE:

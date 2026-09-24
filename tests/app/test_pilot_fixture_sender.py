@@ -362,6 +362,34 @@ class PilotFixtureSenderTests(unittest.TestCase):
             self.assertEqual(len(messages.send_calls), 1)
             self.assertEqual(len(messages.modify_calls), 1)
 
+    def test_presend_receipt_failure_leaves_no_batch_claim(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = self.make_batch(Path(temporary))
+            messages = Messages()
+            service = Service(messages)
+            invalid_receipt = ROOT / "pilot-test-output" / "receipt.json"
+            with self.assertRaises(module.PilotMailError):
+                module.send_batch(
+                    manifest,
+                    expected_account="pilot@example.test",
+                    label="BelegDock-Pilot",
+                    execute=True,
+                    service=service,
+                    receipt_path=invalid_receipt,
+                )
+            self.assertEqual(messages.send_calls, [])
+            self.assertFalse((manifest.parent / ".delivery-claim.json").exists())
+            module.send_batch(
+                manifest,
+                expected_account="pilot@example.test",
+                label="BelegDock-Pilot",
+                execute=True,
+                service=service,
+                receipt_path=Path(temporary) / "valid-receipt.json",
+            )
+            self.assertEqual(len(messages.send_calls), 1)
+
     def test_alternate_receipt_path_cannot_bypass_batch_claim(self):
         module = self.load_module()
         with tempfile.TemporaryDirectory() as temporary:
