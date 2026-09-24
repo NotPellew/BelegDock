@@ -35,7 +35,7 @@ FORBIDDEN_NAME_PATTERNS = (
     re.compile(r"^test_.*\.py$", re.IGNORECASE),
 )
 FORBIDDEN_TEXT_PATTERNS = (
-    re.compile(r"C:\\Users\\", re.IGNORECASE),
+    re.compile(r"C:\\+Users\\+", re.IGNORECASE),
     re.compile(r"/home/[A-Za-z0-9._-]+/"),
 )
 TEXT_SUFFIXES = {
@@ -53,7 +53,20 @@ TEXT_SUFFIXES = {
     ".ps1",
     ".sh",
 }
-FORBIDDEN_TEXT_EXCLUDED_PARTS = {"_internal"}
+GOOGLE_DISCOVERY_DOCUMENTS = "_internal/googleapiclient/discovery_cache/documents"
+KNOWN_INCIDENTAL_TEXT_PREFIXES = {
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/cloudidentity.v1.json": (
+        r"C:\\Users\\%USERPROFILE%\\.secureConnect\\context_aware_config.json",
+    ),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/cloudidentity.v1beta1.json": (
+        r"C:\\Users\\%USERPROFILE%\\.secureConnect\\context_aware_config.json",
+    ),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/dataproc.v1.json": ("/home/usr/",),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/dataproc.v1beta2.json": ("/home/usr/",),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/homegraph.v1.json": (
+        "cs//depot/google3/home/homeservicelayer/uddm/types/uddm_device_types.proto",
+    ),
+}
 
 REQUIRED_BUNDLE_ENTRIES = ("_tkinter.pyd", "_tcl_data", "_tk_data", CONSOLE_EXE, GUI_EXE)
 REQUIRED_BUNDLE_FILES = ("certifi/cacert.pem",)
@@ -130,6 +143,15 @@ def _read_text(path: Path) -> str:
         return ""
 
 
+def _without_known_incidental_text(relative: Path, text: str) -> str:
+    normalized = relative
+    if relative.parts and relative.parts[0] == BUNDLE_NAME:
+        normalized = Path(*relative.parts[1:])
+    for prefix in KNOWN_INCIDENTAL_TEXT_PREFIXES.get(normalized.as_posix(), ()):
+        text = text.replace(prefix, "")
+    return text
+
+
 def _is_public_ca_bundle(path: Path) -> bool:
     return (
         path.name.lower() == PUBLIC_CA_BUNDLE_NAME
@@ -152,12 +174,8 @@ def forbidden_entries(root: Path) -> list[str]:
         if any(pattern.match(name) for pattern in FORBIDDEN_NAME_PATTERNS):
             findings.add(relative.as_posix())
             continue
-        if (
-            path.is_file()
-            and path.suffix.lower() in TEXT_SUFFIXES
-            and not set(relative.parts) & FORBIDDEN_TEXT_EXCLUDED_PARTS
-        ):
-            text = _read_text(path)
+        if path.is_file() and path.suffix.lower() in TEXT_SUFFIXES:
+            text = _without_known_incidental_text(relative, _read_text(path))
             if any(pattern.search(text) for pattern in FORBIDDEN_TEXT_PATTERNS):
                 findings.add(relative.as_posix())
     return sorted(findings)
