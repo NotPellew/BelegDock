@@ -51,6 +51,7 @@ GROUPS = (
     ("windows_packaging_bounds", "beaf52ac145821cd88de123d05243715181d9c30", "test_windows_packaging_bounds.py", 4, {"AssertionError"}),
     ("windows_packaging_internal", "c6bdc14395fc532f9baae0e823d868632668b0b7", "test_windows_packaging_internal.py", 1, {"AssertionError"}),
     ("windows_packaging_path_scan", "80dd4753bcfcd0171b6520e2e88ac19ca7c12a75", "test_windows_packaging_path_scan.py", 3, {"AssertionError"}),
+    ("windows_packaging_path_scan_review", "8c6b7c17be544f1631aa25adddf61be457c41b75", "test_windows_packaging_path_scan_review.py", 2, {"AssertionError"}),
     ("desktop_launch", "29d8232bdeb2c331cdb77d4211c9ff96bf00301f", "test_desktop_launch.py", 3, {"AssertionError"}),
 )
 
