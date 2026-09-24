@@ -1,0 +1,3 @@
+pilot_fixtures/templates/*.xml text eol=lf
+pilot_fixtures/templates/*.json text eol=lf
+pilot_fixtures/templates/*.pdf binary
