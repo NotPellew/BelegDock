@@ -27,7 +27,9 @@ class PilotMailError(RuntimeError):
 
 
 def _load_generator() -> Any:
-    path = Path(__file__).with_name("generate_pilot_fixtures.py")
+    path = _path_without_symlink_components(
+        Path(__file__).with_name("generate_pilot_fixtures.py")
+    )
     spec = importlib.util.spec_from_file_location("pilot_fixture_generator", path)
     if spec is None or spec.loader is None:
         raise PilotMailError("pilot fixture validator is unavailable")
@@ -37,6 +39,18 @@ def _load_generator() -> Any:
     except Exception as error:
         raise PilotMailError("pilot fixture validator could not be loaded") from error
     return module
+
+
+def _path_without_symlink_components(path: Path) -> Path:
+    raw = Path(path).expanduser()
+    if not raw.is_absolute():
+        raw = Path.cwd() / raw
+    current = Path(raw.anchor)
+    for part in raw.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            raise PilotMailError(f"path must not contain symlink components: {path}")
+    return raw
 
 
 def native_backend() -> Any:
@@ -85,9 +99,7 @@ def _regular_file(path: Path) -> None:
 
 
 def _external_path(path: Path) -> Path:
-    raw = Path(path).expanduser()
-    if raw.is_symlink():
-        raise PilotMailError("pilot output path must not be a symlink")
+    raw = _path_without_symlink_components(path)
     resolved = raw.resolve()
     repository = REPO_ROOT.resolve()
     if resolved == repository or repository in resolved.parents:
@@ -279,11 +291,13 @@ def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
 
 def _replace_receipt(path: Path, receipt: dict[str, Any]) -> None:
     resolved = _external_path(path)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{resolved.name}.", dir=resolved.parent
-    )
-    temporary = Path(temporary_name)
+    descriptor = -1
+    temporary: Path | None = None
     try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{resolved.name}.", dir=resolved.parent
+        )
+        temporary = Path(temporary_name)
         with os.fdopen(descriptor, "wb") as handle:
             descriptor = -1
             handle.write(_receipt_bytes(receipt))
@@ -291,15 +305,16 @@ def _replace_receipt(path: Path, receipt: dict[str, Any]) -> None:
             os.fsync(handle.fileno())
         os.replace(temporary, resolved)
         _fsync_parent(resolved)
-    except OSError as error:
+    except (OSError, PilotMailError) as error:
         raise PilotMailError("could not update delivery receipt") from error
     finally:
         if descriptor != -1:
             os.close(descriptor)
-        try:
-            temporary.unlink()
-        except FileNotFoundError:
-            pass
+        if temporary is not None:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def _persist_receipt(path: Path, receipt: dict[str, Any], context: str) -> None:

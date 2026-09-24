@@ -41,7 +41,7 @@ class PilotFixtureGenerationTests(unittest.TestCase):
         template = (ROOT / "pilot_fixtures" / "templates" / "accepted-invoice.xml").read_bytes()
         self.assertNotIn(b"\r\n", template)
 
-
+    def test_generate_creates_manifest_and_expected_fixture_set(self):
         module = self.load_module()
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "batch"
@@ -83,10 +83,6 @@ class PilotFixtureGenerationTests(unittest.TestCase):
                 (first / "accepted-001.pdf").read_bytes(),
                 (second / "accepted-001.pdf").read_bytes(),
             )
-            self.assertEqual(
-                (first / "accepted-001.pdf").read_bytes(),
-                (different / "accepted-001.pdf").read_bytes(),
-            ) if False else None
             self.assertNotEqual(
                 (first / "accepted-001.pdf").read_bytes(),
                 (different / "accepted-001.pdf").read_bytes(),

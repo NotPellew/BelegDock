@@ -22,6 +22,18 @@ class FixtureError(RuntimeError):
     pass
 
 
+def _path_without_symlink_components(path: Path) -> Path:
+    raw = Path(path).expanduser()
+    if not raw.is_absolute():
+        raw = Path.cwd() / raw
+    current = Path(raw.anchor)
+    for part in raw.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            raise FixtureError(f"path must not contain symlink components: {path}")
+    return raw
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -59,7 +71,9 @@ def _regular_file(path: Path) -> None:
 
 
 def _load_template_metadata(template_dir: Path) -> dict[str, Any]:
-    metadata_path = template_dir / "metadata.json"
+    template_dir = _path_without_symlink_components(template_dir)
+    metadata_path = _path_without_symlink_components(template_dir / "metadata.json")
+    _regular_file(metadata_path)
     try:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -75,7 +89,7 @@ def _load_template_metadata(template_dir: Path) -> dict[str, Any]:
 def _load_template(template_dir: Path, metadata: dict[str, Any], name: str) -> bytes:
     if name not in {PDF_TEMPLATE, XML_TEMPLATE}:
         raise FixtureError(f"unknown template: {name}")
-    path = template_dir / name
+    path = _path_without_symlink_components(template_dir / name)
     _regular_file(path)
     try:
         data = path.read_bytes()
@@ -127,7 +141,7 @@ def _malformed_xml(data: bytes) -> bytes:
 
 
 def _expected_files(run_id: str, template_dir: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
-    template_dir = Path(template_dir).resolve()
+    template_dir = _path_without_symlink_components(template_dir)
     metadata = _load_template_metadata(template_dir)
     pdf_template = _load_template(template_dir, metadata, PDF_TEMPLATE)
     xml_template = _load_template(template_dir, metadata, XML_TEMPLATE)
@@ -143,9 +157,7 @@ def _expected_files(run_id: str, template_dir: Path) -> tuple[dict[str, Any], di
 
 
 def _prepare_output(output: Path) -> Path:
-    raw = Path(output).expanduser()
-    if raw.is_symlink():
-        raise FixtureError("output directory must not be a symlink")
+    raw = _path_without_symlink_components(output)
     resolved = raw.resolve()
     repository = REPO_ROOT.resolve()
     if resolved == repository or repository in resolved.parents:
@@ -176,7 +188,7 @@ def generate_batch(
 ) -> dict[str, Any]:
     run_id = _validate_run_id(run_id)
     output = _prepare_output(Path(output))
-    template_dir = Path(template_dir).resolve()
+    template_dir = _path_without_symlink_components(template_dir)
     metadata, expected_files = _expected_files(run_id, template_dir)
     roles = {
         "accepted-001.pdf": ("accepted", "accept"),
@@ -215,8 +227,8 @@ def _validate_manifest_entry(batch: Path, entry: Any) -> tuple[dict[str, Any], b
     _validate_bytes(filename, b"x")
     if Path(filename).name != filename:
         raise FixtureError("manifest filename must not contain a directory")
-    path = batch / filename
-    if path.parent != batch or path.is_symlink():
+    path = _path_without_symlink_components(batch / filename)
+    if path.parent != batch:
         raise FixtureError("manifest document path is unsafe")
     _regular_file(path)
     try:
@@ -258,13 +270,11 @@ def _validate_batch(
     batch: Path,
     template_dir: Path = TEMPLATE_DIR,
 ) -> tuple[dict[str, Any], dict[str, bytes]]:
-    raw_batch = Path(batch).expanduser()
-    if raw_batch.is_symlink():
-        raise FixtureError("fixture batch directory must not be a symlink")
+    raw_batch = _path_without_symlink_components(batch)
     batch = raw_batch.resolve()
     if not batch.is_dir():
         raise FixtureError("fixture batch directory is unavailable")
-    manifest_path = batch / "manifest.json"
+    manifest_path = _path_without_symlink_components(batch / "manifest.json")
     _regular_file(manifest_path)
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

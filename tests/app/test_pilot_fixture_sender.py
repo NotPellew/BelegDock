@@ -332,7 +332,7 @@ class PilotFixtureSenderTests(unittest.TestCase):
             manifest = self.make_batch(Path(temporary))
             messages = Messages()
             service = Service(messages)
-            with patch.object(module, "_replace_receipt", side_effect=module.PilotMailError("disk full")):
+            with patch.object(module.tempfile, "mkstemp", side_effect=OSError("no temporary space")):
                 with self.assertRaisesRegex(module.PilotMailError, "message-1"):
                     module.send_batch(
                         manifest,
