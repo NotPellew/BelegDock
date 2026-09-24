@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_DIR = REPO_ROOT / "pilot_fixtures" / "templates"
 MAX_FILE_SIZE = 5_000_000
+MAX_MANIFEST_SIZE = 1_000_000
 PDF_TEMPLATE = "accepted-invoice.pdf"
 XML_TEMPLATE = "accepted-invoice.xml"
 RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
@@ -75,8 +76,12 @@ def _load_template_metadata(template_dir: Path) -> dict[str, Any]:
     metadata_path = _path_without_symlink_components(template_dir / "metadata.json")
     _regular_file(metadata_path)
     try:
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        with metadata_path.open("rb") as handle:
+            metadata_bytes = handle.read(MAX_MANIFEST_SIZE + 1)
+        if len(metadata_bytes) > MAX_MANIFEST_SIZE:
+            raise FixtureError("template metadata exceeds the size limit")
+        metadata = json.loads(metadata_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise FixtureError("template metadata is unavailable or invalid") from error
     if not isinstance(metadata, dict) or not isinstance(metadata.get("version"), str):
         raise FixtureError("template metadata is invalid")
@@ -232,9 +237,12 @@ def _validate_manifest_entry(batch: Path, entry: Any) -> tuple[dict[str, Any], b
         raise FixtureError("manifest document path is unsafe")
     _regular_file(path)
     try:
-        data = path.read_bytes()
+        with path.open("rb") as handle:
+            data = handle.read(MAX_FILE_SIZE + 1)
     except OSError as error:
         raise FixtureError(f"manifest document cannot be read: {filename}") from error
+    if len(data) > MAX_FILE_SIZE:
+        raise FixtureError(f"manifest document exceeds the {MAX_FILE_SIZE}-byte limit")
     if not isinstance(entry["size"], int) or isinstance(entry["size"], bool):
         raise FixtureError("manifest document size is invalid")
     if entry["size"] != len(data) or not isinstance(entry["sha256"], str):
@@ -277,8 +285,12 @@ def _validate_batch(
     manifest_path = _path_without_symlink_components(batch / "manifest.json")
     _regular_file(manifest_path)
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        with manifest_path.open("rb") as handle:
+            manifest_bytes = handle.read(MAX_MANIFEST_SIZE + 1)
+        if len(manifest_bytes) > MAX_MANIFEST_SIZE:
+            raise FixtureError(f"fixture manifest exceeds the {MAX_MANIFEST_SIZE}-byte limit")
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise FixtureError("fixture manifest is unavailable or invalid") from error
     if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 1:
         raise FixtureError("fixture manifest schema is invalid")
@@ -315,7 +327,7 @@ def _validate_batch(
         raise FixtureError("duplicate fixture must be a PDF")
     if duplicate["sha256"] != accepted_pdfs[0]["sha256"] or duplicate["size"] != accepted_pdfs[0]["size"]:
         raise FixtureError("duplicate fixture does not match the accepted PDF")
-    manifest_sha256 = _sha256(manifest_path.read_bytes())
+    manifest_sha256 = _sha256(manifest_bytes)
     return {
         "runId": run_id,
         "templateVersion": manifest["templateVersion"],

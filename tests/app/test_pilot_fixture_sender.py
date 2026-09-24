@@ -63,7 +63,7 @@ class Messages:
             raise self.label_error
         if self.label_result is not None:
             return Result(self.label_result)
-        return Result({"id": kwargs["id"]})
+        return Result({"id": kwargs["id"], "labelIds": ["Label_1"]})
 
 
 class Users:
@@ -308,7 +308,7 @@ class PilotFixtureSenderTests(unittest.TestCase):
         module = self.load_module()
         with tempfile.TemporaryDirectory() as temporary:
             manifest = self.make_batch(Path(temporary))
-            messages = Messages(label_result=False)
+            messages = Messages(label_result={"id": "message-1"})
             service = Service(messages)
             receipt_path = Path(temporary) / "receipt.json"
             with self.assertRaises(module.PilotMailError):
@@ -325,6 +325,23 @@ class PilotFixtureSenderTests(unittest.TestCase):
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             self.assertEqual(receipt["outcome"], "sent_label_unknown")
             self.assertEqual(receipt["messageId"], "message-1")
+
+    def test_malformed_label_list_fails_before_sending(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = self.make_batch(Path(temporary))
+            messages = Messages()
+            service = Service(messages)
+            service.user_resource.labels = None
+            with self.assertRaises(module.PilotMailError):
+                module.send_batch(
+                    manifest,
+                    expected_account="pilot@example.test",
+                    label="BelegDock-Pilot",
+                    execute=True,
+                    service=service,
+                )
+            self.assertEqual(messages.send_calls, [])
 
     def test_post_send_receipt_failure_preserves_remote_state_in_error(self):
         module = self.load_module()

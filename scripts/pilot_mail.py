@@ -196,6 +196,8 @@ def _label_id(service: Any, label: str) -> str:
     except Exception as error:
         raise PilotMailError("could not load the pilot Gmail label") from error
     entries = body.get("labels", []) if isinstance(body, dict) else []
+    if not isinstance(entries, list):
+        raise PilotMailError("pilot Gmail label response is invalid")
     matches = [
         entry.get("id")
         for entry in entries
@@ -309,11 +311,14 @@ def _replace_receipt(path: Path, receipt: dict[str, Any]) -> None:
         raise PilotMailError("could not update delivery receipt") from error
     finally:
         if descriptor != -1:
-            os.close(descriptor)
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
         if temporary is not None:
             try:
                 temporary.unlink()
-            except FileNotFoundError:
+            except OSError:
                 pass
 
 
@@ -416,7 +421,12 @@ def send_batch(
             id=message_id,
             body={"addLabelIds": [label_id]},
         ).execute()
-        if not isinstance(label_result, dict) or label_result.get("id") != message_id:
+        if (
+            not isinstance(label_result, dict)
+            or label_result.get("id") != message_id
+            or not isinstance(label_result.get("labelIds"), list)
+            or label_id not in label_result["labelIds"]
+        ):
             raise ValueError("invalid label response")
     except Exception as error:
         receipt["outcome"] = "sent_label_unknown"

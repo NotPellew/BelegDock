@@ -101,6 +101,15 @@ class PilotFixtureGenerationTests(unittest.TestCase):
             with self.assertRaises(module.FixtureError):
                 module.validate_batch(output)
 
+    def test_validate_rejects_oversized_attachment_before_full_read(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "batch"
+            module.generate_batch(output, "pilot-001")
+            (output / "accepted-001.pdf").write_bytes(b"x" * (module.MAX_FILE_SIZE + 1))
+            with self.assertRaisesRegex(module.FixtureError, "5000000"):
+                module.validate_batch(output)
+
     def test_output_must_be_outside_repository_and_not_collide(self):
         module = self.load_module()
         with tempfile.TemporaryDirectory() as temporary:
