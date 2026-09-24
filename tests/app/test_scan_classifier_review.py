@@ -64,6 +64,7 @@ class ScanClassifierReviewTests(unittest.TestCase):
             cli, "gmail_client", return_value=("account", Gmail())
         ), redirect_stdout(output), redirect_stderr(error):
             status = cli.main(["--data-dir", temporary, "scan", "--label", "Invoices"])
+            self.assertEqual(list(Path(temporary).iterdir()), [])
 
         self.assertEqual(status, 0, error.getvalue())
         self.assertEqual(
@@ -80,7 +81,6 @@ class ScanClassifierReviewTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("PRIVATE-", output.getvalue() + error.getvalue())
-        self.assertEqual(list(Path(temporary).iterdir()), [])
 
     def test_credit_card_sender_is_not_treated_as_a_credit_note(self):
         module = classification_module()
