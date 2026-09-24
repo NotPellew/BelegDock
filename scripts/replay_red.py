@@ -57,6 +57,7 @@ GROUPS = (
     ("desktop_launch", "29d8232bdeb2c331cdb77d4211c9ff96bf00301f", "test_desktop_launch.py", 3, {"AssertionError"}),
     ("scan_classification", "da035b9c7c061e77d3dedc37f8a651346cf10a45", "test_scan_classifier.py", 10, {"AssertionError"}),
     ("scan_classification_review", "eb25ed2e36f3650a6e3e73d0f0c69d8d0896923c", "test_scan_classifier_review.py", 4, {"AssertionError"}),
+    ("scan_classification_final", "6c9ae0c68b13eebc950d65d5d09eca161ffca467", "test_scan_classifier_final.py", 2, {"AssertionError"}),
 )
 
 
