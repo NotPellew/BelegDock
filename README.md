@@ -228,7 +228,11 @@ Nachrichten oder Labels verändert. Ein unbekannter Konto-Account, ein fehlendes
 Label, ein unklares Sendenergebnis oder ein fehlgeschlagenes Label-Update
 führt zu einemAbbruch ohne automatischen Wiederholungsversuch. Der
 Zustellstatus wird in einem Zustellnachweis außerhalb des Checkouts
-dokumentiert.
+dokumentiert. Die Statuswerte unterscheiden zwischen `send_rejected`
+(definitiv nicht gesendet), `send_uncertain` (Remote-Ergebnis unbekannt) und
+`sent_label_unknown` (gesendet, Label-Ergebnis unbekannt). Ein bereits
+vorhandener Zustellnachweis sperrt weitere Zustellversuche für denselben
+Batch.
 
 Die Werkzeuge erzeugen und versenden nur Testdaten. Sie führen keinen
 Lexware-Upload und keine Wiederherstellung aus. ZUGFeRD-Dokumente sind in der

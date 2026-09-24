@@ -126,6 +126,22 @@ def _malformed_xml(data: bytes) -> bytes:
     raise FixtureError("malformed XML transformation remained well-formed")
 
 
+def _expected_files(run_id: str, template_dir: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
+    template_dir = Path(template_dir).resolve()
+    metadata = _load_template_metadata(template_dir)
+    pdf_template = _load_template(template_dir, metadata, PDF_TEMPLATE)
+    xml_template = _load_template(template_dir, metadata, XML_TEMPLATE)
+    accepted_pdf = _vary_pdf(pdf_template, run_id)
+    accepted_xml = _vary_xml(xml_template, run_id)
+    files = {
+        "accepted-001.pdf": accepted_pdf,
+        "duplicate-001.pdf": accepted_pdf,
+        "rejected-001.xml": _malformed_xml(_vary_xml(xml_template, run_id)),
+        "accepted-002.xml": accepted_xml,
+    }
+    return metadata, files
+
+
 def _prepare_output(output: Path) -> Path:
     raw = Path(output).expanduser()
     if raw.is_symlink():
@@ -161,21 +177,16 @@ def generate_batch(
     run_id = _validate_run_id(run_id)
     output = _prepare_output(Path(output))
     template_dir = Path(template_dir).resolve()
-    metadata = _load_template_metadata(template_dir)
-    pdf_template = _load_template(template_dir, metadata, PDF_TEMPLATE)
-    xml_template = _load_template(template_dir, metadata, XML_TEMPLATE)
-    accepted_pdf = _vary_pdf(pdf_template, run_id)
-    duplicate_pdf = accepted_pdf
-    accepted_xml = _vary_xml(xml_template, run_id)
-    rejected_xml = _malformed_xml(_vary_xml(xml_template, run_id))
-    files = {
-        "accepted-001.pdf": (accepted_pdf, "accepted", "accept"),
-        "duplicate-001.pdf": (duplicate_pdf, "duplicate", "deduplicate"),
-        "rejected-001.xml": (rejected_xml, "rejected", "reject"),
-        "accepted-002.xml": (accepted_xml, "accepted", "accept"),
+    metadata, expected_files = _expected_files(run_id, template_dir)
+    roles = {
+        "accepted-001.pdf": ("accepted", "accept"),
+        "duplicate-001.pdf": ("duplicate", "deduplicate"),
+        "rejected-001.xml": ("rejected", "reject"),
+        "accepted-002.xml": ("accepted", "accept"),
     }
     entries = []
-    for filename, (data, role, expected) in files.items():
+    for filename, data in expected_files.items():
+        role, expected = roles[filename]
         _validate_bytes(filename, data)
         (output / filename).write_bytes(data)
         entries.append(_entry(filename, role, expected, data))
@@ -192,7 +203,7 @@ def generate_batch(
     return validate_batch(output)
 
 
-def _validate_manifest_entry(batch: Path, entry: Any) -> dict[str, Any]:
+def _validate_manifest_entry(batch: Path, entry: Any) -> tuple[dict[str, Any], bytes]:
     if not isinstance(entry, dict):
         raise FixtureError("manifest document entry is invalid")
     required = {"file", "role", "expected", "size", "sha256"}
@@ -234,16 +245,19 @@ def _validate_manifest_entry(batch: Path, entry: Any) -> dict[str, Any]:
         ET.fromstring(data) if filename.endswith(".xml") else None
     if filename.endswith(".pdf") and (not data.startswith(b"%PDF-") or not data.endswith(b"%%EOF\r\n")):
         raise FixtureError("PDF fixture is malformed")
-    return {
+    return ({
         "file": filename,
         "role": entry["role"],
         "expected": entry["expected"],
         "size": entry["size"],
         "sha256": entry["sha256"],
-    }
+    }, data)
 
 
-def validate_batch(batch: Path, template_dir: Path = TEMPLATE_DIR) -> dict[str, Any]:
+def _validate_batch(
+    batch: Path,
+    template_dir: Path = TEMPLATE_DIR,
+) -> tuple[dict[str, Any], dict[str, bytes]]:
     batch = Path(batch).expanduser().resolve()
     if not batch.is_dir() or batch.is_symlink():
         raise FixtureError("fixture batch directory is unavailable")
@@ -264,7 +278,17 @@ def validate_batch(batch: Path, template_dir: Path = TEMPLATE_DIR) -> dict[str, 
         raise FixtureError("fixture manifest has no documents")
     if len({entry.get("file") for entry in documents if isinstance(entry, dict)}) != len(documents):
         raise FixtureError("fixture manifest has duplicate filenames")
-    validated = [_validate_manifest_entry(batch, entry) for entry in documents]
+    validated_with_data = [_validate_manifest_entry(batch, entry) for entry in documents]
+    validated = [entry for entry, _ in validated_with_data]
+    actual_files = {entry["file"]: data for entry, data in validated_with_data}
+    metadata, expected_files = _expected_files(run_id, template_dir)
+    if manifest.get("templateVersion") != metadata["version"]:
+        raise FixtureError("fixture manifest template version is invalid")
+    if set(actual_files) != set(expected_files):
+        raise FixtureError("fixture manifest does not contain the generated fixture set")
+    for filename, expected_data in expected_files.items():
+        if actual_files[filename] != expected_data:
+            raise FixtureError(f"fixture bytes do not match the trusted template batch: {filename}")
     roles = [entry["role"] for entry in validated]
     if sorted(roles) != ["accepted", "accepted", "duplicate", "rejected"]:
         raise FixtureError("fixture manifest has an unexpected role set")
@@ -274,17 +298,32 @@ def validate_batch(batch: Path, template_dir: Path = TEMPLATE_DIR) -> dict[str, 
     if len(accepted_pdfs) != 1:
         raise FixtureError("fixture manifest has no unique accepted PDF")
     duplicate = next(entry for entry in validated if entry["role"] == "duplicate")
-    if duplicate["file"].endswith(".pdf") is False:
+    if not duplicate["file"].endswith(".pdf"):
         raise FixtureError("duplicate fixture must be a PDF")
     if duplicate["sha256"] != accepted_pdfs[0]["sha256"] or duplicate["size"] != accepted_pdfs[0]["size"]:
         raise FixtureError("duplicate fixture does not match the accepted PDF")
     manifest_sha256 = _sha256(manifest_path.read_bytes())
     return {
         "runId": run_id,
-        "templateVersion": manifest.get("templateVersion"),
+        "templateVersion": manifest["templateVersion"],
         "manifestSha256": manifest_sha256,
         "documents": validated,
-    }
+    }, actual_files
+
+
+def validated_batch(
+    batch: Path,
+    template_dir: Path = TEMPLATE_DIR,
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    return _validate_batch(batch, template_dir)
+
+
+def validate_batch(batch: Path, template_dir: Path = TEMPLATE_DIR) -> dict[str, Any]:
+    return _validate_batch(batch, template_dir)[0]
+
+
+def validated_files(batch: Path, template_dir: Path = TEMPLATE_DIR) -> dict[str, bytes]:
+    return _validate_batch(batch, template_dir)[1]
 
 
 def make_parser() -> argparse.ArgumentParser:

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import platform
 import xml.etree.ElementTree as ET
 
-ROOT_FILES = ("pyproject.toml", "uv.lock", "AGENTS.md")
+ROOT_FILES = (".gitattributes", "pyproject.toml", "uv.lock", "AGENTS.md")
 ROOT_DIRS = ("tests", "scripts", ".github", "pilot_fixtures")
 
 

@@ -34,7 +34,14 @@ class PilotFixtureGenerationTests(unittest.TestCase):
             self.assertLessEqual(path.stat().st_size, 5_000_000)
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), entry["sha256"])
 
-    def test_generate_creates_manifest_and_expected_fixture_set(self):
+    def test_xml_template_is_pinned_to_lf_line_endings(self):
+        self.assertTrue((ROOT / ".gitattributes").is_file())
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("pilot_fixtures/templates/*.xml text eol=lf", attributes)
+        template = (ROOT / "pilot_fixtures" / "templates" / "accepted-invoice.xml").read_bytes()
+        self.assertNotIn(b"\r\n", template)
+
+
         module = self.load_module()
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "batch"

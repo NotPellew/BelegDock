@@ -3,13 +3,14 @@ import base64
 from datetime import datetime, timezone
 from email import policy
 from email.message import EmailMessage
-import hashlib
+import importlib.util
 from importlib import import_module
 import json
+import os
 from pathlib import Path
-import re
 import stat
 import sys
+import tempfile
 from typing import Any
 
 
@@ -19,13 +20,23 @@ SENDER_SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/gmail.modify",
 ]
-MAX_FILE_SIZE = 5_000_000
-RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
-HASH_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class PilotMailError(RuntimeError):
     pass
+
+
+def _load_generator() -> Any:
+    path = Path(__file__).with_name("generate_pilot_fixtures.py")
+    spec = importlib.util.spec_from_file_location("pilot_fixture_generator", path)
+    if spec is None or spec.loader is None:
+        raise PilotMailError("pilot fixture validator is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as error:
+        raise PilotMailError("pilot fixture validator could not be loaded") from error
+    return module
 
 
 def native_backend() -> Any:
@@ -64,12 +75,6 @@ def load_sender_credentials() -> str:
     return value
 
 
-def _run_id(value: Any) -> str:
-    if not isinstance(value, str) or RUN_ID_PATTERN.fullmatch(value) is None:
-        raise PilotMailError("manifest run ID is invalid")
-    return value
-
-
 def _regular_file(path: Path) -> None:
     try:
         info = path.lstat()
@@ -90,76 +95,25 @@ def _external_path(path: Path) -> Path:
     return resolved
 
 
-def _safe_filename(value: Any) -> str:
-    if (
-        not isinstance(value, str)
-        or not value
-        or "/" in value
-        or "\\" in value
-        or value in {".", ".."}
-    ):
-        raise PilotMailError("manifest filename is invalid")
-    if Path(value).suffix.lower() not in {".pdf", ".xml"}:
-        raise PilotMailError("manifest contains an unsupported attachment format")
-    return value
-
-
-def _manifest_sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def read_manifest(path: Path) -> dict[str, Any]:
     manifest_path = _external_path(Path(path))
+    if manifest_path.name != "manifest.json":
+        raise PilotMailError("pilot manifest filename is invalid")
     _regular_file(manifest_path)
+    generator = _load_generator()
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise PilotMailError("pilot manifest is unavailable or invalid") from error
-    if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 1:
-        raise PilotMailError("pilot manifest schema is invalid")
-    run_id = _run_id(manifest.get("runId"))
-    documents = manifest.get("documents")
-    if not isinstance(documents, list) or not documents:
-        raise PilotMailError("pilot manifest has no documents")
-    batch = manifest_path.parent.resolve()
-    seen: set[str] = set()
-    validated: list[dict[str, Any]] = []
-    for entry in documents:
-        if not isinstance(entry, dict):
-            raise PilotMailError("pilot manifest document entry is invalid")
-        if set(entry) != {"file", "role", "expected", "size", "sha256"}:
-            raise PilotMailError("pilot manifest document entry has unexpected fields")
-        filename = _safe_filename(entry["file"])
-        if filename in seen:
-            raise PilotMailError("pilot manifest contains duplicate filenames")
-        seen.add(filename)
-        file_path = batch / filename
-        if file_path.parent != batch or file_path.is_symlink():
-            raise PilotMailError("pilot manifest attachment path is unsafe")
-        _regular_file(file_path)
-        try:
-            data = file_path.read_bytes()
-        except OSError as error:
-            raise PilotMailError(f"manifest attachment cannot be read: {filename}") from error
-        if len(data) > MAX_FILE_SIZE:
-            raise PilotMailError(f"manifest attachment exceeds the {MAX_FILE_SIZE}-byte limit")
-        if not isinstance(entry["size"], int) or isinstance(entry["size"], bool) or entry["size"] != len(data):
-            raise PilotMailError("manifest attachment size does not match")
-        if not isinstance(entry["sha256"], str) or HASH_PATTERN.fullmatch(entry["sha256"]) is None:
-            raise PilotMailError("manifest attachment hash is invalid")
-        if entry["sha256"] != hashlib.sha256(data).hexdigest():
-            raise PilotMailError(f"manifest attachment hash mismatch: {filename}")
-        role_expectations = {"accepted": "accept", "duplicate": "deduplicate", "rejected": "reject"}
-        if entry["role"] not in role_expectations:
-            raise PilotMailError("manifest attachment role is invalid")
-        if entry["expected"] != role_expectations[entry["role"]]:
-            raise PilotMailError("manifest attachment expectation does not match its role")
-        validated.append(dict(entry))
-    result = dict(manifest)
-    result["runId"] = run_id
-    result["documents"] = validated
-    result["_batchDir"] = batch
-    result["_manifestSha256"] = _manifest_sha256(manifest_path)
+        validated, files = generator.validated_batch(manifest_path.parent)
+    except Exception as error:
+        raise PilotMailError("pilot manifest is not a generated synthetic fixture batch") from error
+    result = {
+        "schemaVersion": 1,
+        "runId": validated["runId"],
+        "templateVersion": validated["templateVersion"],
+        "documents": validated["documents"],
+    }
+    result["_batchDir"] = manifest_path.parent.resolve()
+    result["_manifestSha256"] = validated["manifestSha256"]
+    result["_batchFiles"] = files
     return result
 
 
@@ -186,9 +140,9 @@ def build_message(manifest: dict[str, Any], recipient: str, label: str) -> bytes
         raise PilotMailError("test recipient is required")
     if not isinstance(label, str) or not label.strip():
         raise PilotMailError("test label is required")
-    batch = manifest.get("_batchDir")
-    if not isinstance(batch, Path):
-        raise PilotMailError("validated manifest has no batch directory")
+    batch_files = manifest.get("_batchFiles")
+    if not isinstance(batch_files, dict):
+        raise PilotMailError("validated manifest has no verified batch files")
     message = EmailMessage()
     message["To"] = recipient
     message["Subject"] = f"[BelegDock Pilot] {manifest['runId']}"
@@ -198,7 +152,9 @@ def build_message(manifest: dict[str, Any], recipient: str, label: str) -> bytes
     )
     for entry in manifest["documents"]:
         filename = entry["file"]
-        data = (batch / filename).read_bytes()
+        data = batch_files.get(filename)
+        if not isinstance(data, bytes):
+            raise PilotMailError(f"validated manifest has no bytes for {filename}")
         if filename.lower().endswith(".pdf"):
             maintype, subtype = "application", "pdf"
         else:
@@ -260,17 +216,72 @@ def _build_service() -> Any:
         raise PilotMailError("could not build the pilot Gmail service") from error
 
 
+def _http_status(error: Exception) -> int | None:
+    try:
+        error_type = import_module("googleapiclient.errors").HttpError
+    except Exception:
+        return None
+    if not isinstance(error, error_type):
+        return None
+    status = getattr(error.resp, "status", None)
+    return status if isinstance(status, int) else None
+
+
+def _receipt_bytes(receipt: dict[str, Any]) -> bytes:
+    return (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
 def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
     resolved = _external_path(path)
-    if resolved.exists():
-        raise PilotMailError(f"delivery receipt already exists: {resolved}")
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    resolved.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    payload = _receipt_bytes(receipt)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(resolved, flags, 0o600)
+        view = memoryview(payload)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise OSError("receipt write made no progress")
+            view = view[written:]
+        os.fsync(descriptor)
+    except FileExistsError as error:
+        raise PilotMailError(f"delivery receipt already exists: {resolved}") from error
+    except OSError as error:
+        if descriptor is not None:
+            try:
+                resolved.unlink()
+            except OSError:
+                pass
+        raise PilotMailError("could not claim delivery receipt") from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def _replace_receipt(path: Path, receipt: dict[str, Any]) -> None:
     resolved = _external_path(path)
-    resolved.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{resolved.name}.", dir=resolved.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = -1
+            handle.write(_receipt_bytes(receipt))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, resolved)
+    except OSError as error:
+        raise PilotMailError("could not update delivery receipt") from error
+    finally:
+        if descriptor != -1:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def send_batch(
@@ -305,6 +316,7 @@ def send_batch(
     receipt_file = Path(receipt_path) if receipt_path is not None else Path(manifest_path).parent / "delivery-receipt.json"
     receipt: dict[str, Any] = {
         "outcome": "send_pending",
+        "remoteState": "pending",
         "runId": manifest["runId"],
         "manifestSha256": manifest["_manifestSha256"],
         "label": label,
@@ -318,12 +330,24 @@ def send_batch(
     try:
         result = messages.send(userId="me", raw=encoded).execute()
     except Exception as error:
-        receipt["outcome"] = "send_uncertain"
+        status = _http_status(error)
+        if status is not None and 400 <= status < 500:
+            receipt["outcome"] = "send_rejected"
+            receipt["remoteState"] = "not_sent"
+            receipt["httpStatus"] = status
+            message = "Gmail rejected the message; do not retry"
+        else:
+            receipt["outcome"] = "send_uncertain"
+            receipt["remoteState"] = "unknown"
+            if status is not None:
+                receipt["httpStatus"] = status
+            message = "Gmail send outcome is uncertain; do not retry"
         _replace_receipt(receipt_file, receipt)
-        raise PilotMailError("Gmail send outcome is uncertain; do not retry") from error
+        raise PilotMailError(message) from error
     message_id = result.get("id") if isinstance(result, dict) else None
     if not isinstance(message_id, str) or not message_id:
         receipt["outcome"] = "send_uncertain"
+        receipt["remoteState"] = "unknown"
         _replace_receipt(receipt_file, receipt)
         raise PilotMailError("Gmail send returned no message ID; do not retry")
     receipt["messageId"] = message_id
@@ -334,10 +358,17 @@ def send_batch(
             body={"addLabelIds": [label_id]},
         ).execute()
     except Exception as error:
-        receipt["outcome"] = "sent_unlabeled"
+        receipt["outcome"] = "sent_label_unknown"
+        receipt["remoteState"] = "label_unknown"
+        status = _http_status(error)
+        if status is not None:
+            receipt["httpStatus"] = status
         _replace_receipt(receipt_file, receipt)
-        raise PilotMailError("Gmail message was sent but label application failed; do not resend") from error
+        raise PilotMailError(
+            "Gmail message was sent but label state is unknown; do not resend"
+        ) from error
     receipt["outcome"] = "sent"
+    receipt["remoteState"] = "labeled"
     _replace_receipt(receipt_file, receipt)
     return receipt
 
