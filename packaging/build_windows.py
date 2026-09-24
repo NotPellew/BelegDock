@@ -54,15 +54,20 @@ TEXT_SUFFIXES = {
     ".sh",
 }
 GOOGLE_DISCOVERY_DOCUMENTS = "_internal/googleapiclient/discovery_cache/documents"
-KNOWN_INCIDENTAL_TEXT_PREFIXES = {
+KNOWN_INCIDENTAL_TEXT = {
     f"{GOOGLE_DISCOVERY_DOCUMENTS}/cloudidentity.v1.json": (
         r"C:\\Users\\%USERPROFILE%\\.secureConnect\\context_aware_config.json",
     ),
     f"{GOOGLE_DISCOVERY_DOCUMENTS}/cloudidentity.v1beta1.json": (
         r"C:\\Users\\%USERPROFILE%\\.secureConnect\\context_aware_config.json",
     ),
-    f"{GOOGLE_DISCOVERY_DOCUMENTS}/dataproc.v1.json": ("/home/usr/",),
-    f"{GOOGLE_DISCOVERY_DOCUMENTS}/dataproc.v1beta2.json": ("/home/usr/",),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/dataproc.v1.json": (
+        "file:///home/usr/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar",
+        "/home/usr/bin",
+    ),
+    f"{GOOGLE_DISCOVERY_DOCUMENTS}/dataproc.v1beta2.json": (
+        "file:///home/usr/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar",
+    ),
     f"{GOOGLE_DISCOVERY_DOCUMENTS}/homegraph.v1.json": (
         "cs//depot/google3/home/homeservicelayer/uddm/types/uddm_device_types.proto",
     ),
@@ -136,19 +141,20 @@ def build_manifest(
     }
 
 
-def _read_text(path: Path) -> str:
+def _read_text(path: Path) -> str | None:
     try:
         return path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
-        return ""
+        return None
 
 
 def _without_known_incidental_text(relative: Path, text: str) -> str:
     normalized = relative
     if relative.parts and relative.parts[0] == BUNDLE_NAME:
         normalized = Path(*relative.parts[1:])
-    for prefix in KNOWN_INCIDENTAL_TEXT_PREFIXES.get(normalized.as_posix(), ()):
-        text = text.replace(prefix, "")
+    key = normalized.as_posix()
+    for known_text in KNOWN_INCIDENTAL_TEXT.get(key, ()):
+        text = text.replace(known_text, "")
     return text
 
 
@@ -175,7 +181,11 @@ def forbidden_entries(root: Path) -> list[str]:
             findings.add(relative.as_posix())
             continue
         if path.is_file() and path.suffix.lower() in TEXT_SUFFIXES:
-            text = _without_known_incidental_text(relative, _read_text(path))
+            text = _read_text(path)
+            if text is None:
+                findings.add(relative.as_posix())
+                continue
+            text = _without_known_incidental_text(relative, text)
             if any(pattern.search(text) for pattern in FORBIDDEN_TEXT_PATTERNS):
                 findings.add(relative.as_posix())
     return sorted(findings)

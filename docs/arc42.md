@@ -249,9 +249,11 @@ and host sockets are not. The session gets a temporary home and /tmp.
   `dataproc.v1beta2.json`, and `homegraph.v1.json` under
   `googleapiclient/discovery_cache/documents`. The scanner removes only the
   path-scoped `%USERPROFILE%\\.secureConnect` example from the two Cloud Identity
-  documents, `/home/usr/` from the two Dataproc documents, and the exact Homegraph
-  `homeservicelayer` example; any other user path in those files still fails. The
-  filename, suffix, state, test, and private-key rules apply throughout. This scan
+  documents, the exact `/home/usr/bin` example in Dataproc v1, the complete Hadoop
+  example URI in both Dataproc documents, and the exact Homegraph `homeservicelayer`
+  example; any other user path in those files still fails. An unreadable runtime
+  text file also fails the check. The filename, suffix, state, test, and private-key
+  rules apply throughout. This scan
   does not inspect arbitrary binary data or prove that runtime data cannot contain
   sensitive strings.
   Per-user PATH editing is the most fragile installer step and is
