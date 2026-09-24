@@ -1,0 +1,20 @@
+{
+  "version": "1",
+  "source": "synthetic pilot fixtures previously accepted in the test Lexware organization",
+  "validated_revision": "feeadd2f1ba725dbd7acf02a6941ed7075ec8613",
+  "files": {
+    "accepted-invoice.pdf": {
+      "sha256": "98ce4fa6f05f0d46d4132bac67c63003cb1b2c00501ced12e3faa313c7780ebe",
+      "expected": "accepted"
+    },
+    "accepted-invoice.xml": {
+      "sha256": "0d521fa289064de4aa6c10e096a2ecd021b17bf5699dd8cc4be2392f767b1c2e",
+      "expected": "accepted"
+    }
+  },
+  "notes": [
+    "The templates contain sample data only and are not production documents.",
+    "The PDF is varied only in its fixed-length trailer identifier; the XML is varied only with document-level whitespace.",
+    "The malformed XML is derived from the accepted XML during generation."
+  ]
+}

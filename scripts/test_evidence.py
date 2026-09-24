@@ -9,7 +9,7 @@ import platform
 import xml.etree.ElementTree as ET
 
 ROOT_FILES = ("pyproject.toml", "uv.lock", "AGENTS.md")
-ROOT_DIRS = ("tests", "scripts", ".github")
+ROOT_DIRS = ("tests", "scripts", ".github", "pilot_fixtures")
 
 
 class EvidenceError(Exception):

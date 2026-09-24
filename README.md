@@ -179,6 +179,62 @@ Vorbereiten in Gmail sowie dem Senden und der Ablehnungsbehandlung in Lexware.
 Dieser gefrorene Installer wurde noch nicht live gegen Gmail und Lexware geprüft;
 dafür ist ein eigener Pilotlauf mit Testkonto und Testdaten nötig.
 
+## Windows-Test-Fixtures und Gmail-Pilotversand
+
+Für den Windows-Pilot können synthetische PDF/XML-Dokumente außerhalb dieses
+Checkouts erzeugt werden. Die Generator- und Versandwerkzeuge gehören nicht zur
+installierten Anwendung und werden nicht in den Windows-Installer aufgenommen.
+Die Vorlagen enthalten nur synthetische Beispieldaten.
+
+Im Checkout mit uv eine neue, noch nicht verwendete Ausgabe anlegen:
+
+```sh
+uv run python scripts/generate_pilot_fixtures.py generate \
+  --output C:/Temp/BelegDockPilot/pilot-001 \
+  --run-id pilot-001
+uv run python scripts/generate_pilot_fixtures.py validate \
+  --batch C:/Temp/BelegDockPilot/pilot-001
+```
+
+Die Ausgabe enthält einen Manifesteintrag mit relativen Dateinamen, Größen und
+SHA-256-Hashes. Sie erzeugt einen frischen PDF-Hash, eine bytegleiche
+Dublette, ein absichtlich fehlerhaftes XML und eine korrigierte XML-Version.
+Die Ausgabe darf nicht im Repository liegen und darf nicht überschrieben werden.
+
+Der Versand ist ein eigener, expliziter Testschritt. Dafür ist ein separates
+Google-OAuth-Client-JSON außerhalb des Checkouts und ein dediziertes
+Test-Gmail-Konto mit einem bereits vorhandenen Testlabel erforderlich. Der
+Versand verwendet einen eigenen Credential-Manager-Eintrag `BelegDock-Pilot`
+und die Scopes `gmail.send` und `gmail.modify`; die BelegDock-Anmeldung bleibt
+unverändert auf `gmail.readonly`.
+
+```sh
+uv run python scripts/pilot_mail.py login \
+  --client C:/Secure/pilot-client.json \
+  --expected-account pilot@example.test
+uv run python scripts/pilot_mail.py inspect \
+  --manifest C:/Temp/BelegDockPilot/pilot-001/manifest.json
+uv run python scripts/pilot_mail.py send \
+  --manifest C:/Temp/BelegDockPilot/pilot-001/manifest.json \
+  --expected-account pilot@example.test \
+  --label BelegDock-Pilot \
+  --execute
+```
+
+Ohne `--execute` wird nur ein lokaler Trockenlauf ausgeführt. Mit `--execute`
+erstellt der Versand genau eine neue Nachricht im angegebenen Testkonto und
+wendet das Label nur auf diese Nachricht an. Es werden keine vorhandenen
+Nachrichten oder Labels verändert. Ein unbekannter Konto-Account, ein fehlendes
+Label, ein unklares Sendenergebnis oder ein fehlgeschlagenes Label-Update
+führt zu einemAbbruch ohne automatischen Wiederholungsversuch. Der
+Zustellstatus wird in einem Zustellnachweis außerhalb des Checkouts
+dokumentiert.
+
+Die Werkzeuge erzeugen und versenden nur Testdaten. Sie führen keinen
+Lexware-Upload und keine Wiederherstellung aus. ZUGFeRD-Dokumente sind in der
+ersten Version nicht enthalten, weil dafür eine separat geprüfte Vorlage und
+ein erneuter Live-Nachweis erforderlich sind.
+
 ## Entwicklung
 
 - [AGENTS.md](AGENTS.md): Arbeitsablauf, unveränderliche Tests, Entwicklungsbefehle und Isolation.
