@@ -149,7 +149,11 @@ def _read_text(path: Path) -> str | None:
 
 
 def _remove_complete_known_text(text: str, known_text: str) -> str:
-    pattern = re.compile(re.escape(known_text) + r"(?=\\['\"]|$|[\s,'\")\]}])")
+    pattern = re.compile(
+        r"(?<![A-Za-z0-9._%/\\+:=@?#~-])"
+        + re.escape(known_text)
+        + r"(?=\\['\"]|$|[\s,'\")\]}])"
+    )
     return pattern.sub("", text)
 
 
