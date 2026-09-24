@@ -148,13 +148,17 @@ def _read_text(path: Path) -> str | None:
         return None
 
 
+def _remove_complete_known_text(text: str, known_text: str) -> str:
+    pattern = re.compile(re.escape(known_text) + r"(?=\\['\"]|$|[\s,'\")\]}])")
+    return pattern.sub("", text)
+
+
 def _without_known_incidental_text(relative: Path, text: str) -> str:
     normalized = relative
     if relative.parts and relative.parts[0] == BUNDLE_NAME:
         normalized = Path(*relative.parts[1:])
-    key = normalized.as_posix()
-    for known_text in KNOWN_INCIDENTAL_TEXT.get(key, ()):
-        text = text.replace(known_text, "")
+    for known_text in KNOWN_INCIDENTAL_TEXT.get(normalized.as_posix(), ()):
+        text = _remove_complete_known_text(text, known_text)
     return text
 
 
