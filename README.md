@@ -226,13 +226,13 @@ erstellt der Versand genau eine neue Nachricht im angegebenen Testkonto und
 wendet das Label nur auf diese Nachricht an. Es werden keine vorhandenen
 Nachrichten oder Labels verändert. Ein unbekannter Konto-Account, ein fehlendes
 Label, ein unklares Sendenergebnis oder ein fehlgeschlagenes Label-Update
-führt zu einemAbbruch ohne automatischen Wiederholungsversuch. Der
+führt zu einem Abbruch ohne automatischen Wiederholungsversuch. Der
 Zustellstatus wird in einem Zustellnachweis außerhalb des Checkouts
 dokumentiert. Die Statuswerte unterscheiden zwischen `send_rejected`
 (definitiv nicht gesendet), `send_uncertain` (Remote-Ergebnis unbekannt) und
-`sent_label_unknown` (gesendet, Label-Ergebnis unbekannt). Ein bereits
-Ein kanonischer Claim im Batch-Verzeichnis sperrt weitere Zustellversuche
-für denselben Batch, auch wenn ein anderer Zustellnachweis-Pfad angegeben wird.
+`sent_label_unknown` (gesendet, Label-Ergebnis unbekannt). Ein kanonischer
+Claim im Batch-Verzeichnis sperrt weitere Zustellversuche für denselben Batch,
+auch wenn ein anderer Zustellnachweis-Pfad angegeben wird.
 
 Die Werkzeuge erzeugen und versenden nur Testdaten. Sie führen keinen
 Lexware-Upload und keine Wiederherstellung aus. ZUGFeRD-Dokumente sind in der

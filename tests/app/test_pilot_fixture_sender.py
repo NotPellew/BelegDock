@@ -44,9 +44,10 @@ class Result:
 
 
 class Messages:
-    def __init__(self, label_error=None, send_error=None):
+    def __init__(self, label_error=None, send_error=None, label_result=None):
         self.label_error = label_error
         self.send_error = send_error
+        self.label_result = label_result
         self.send_calls = []
         self.modify_calls = []
 
@@ -60,6 +61,8 @@ class Messages:
         self.modify_calls.append(kwargs)
         if self.label_error:
             raise self.label_error
+        if self.label_result is not None:
+            return Result(self.label_result)
         return Result({"id": kwargs["id"]})
 
 
@@ -301,6 +304,47 @@ class PilotFixtureSenderTests(unittest.TestCase):
             self.assertEqual(receipt["outcome"], "send_rejected")
             self.assertEqual(receipt["remoteState"], "not_sent")
             self.assertEqual(receipt["httpStatus"], 400)
+    def test_malformed_label_response_is_unknown_without_resending(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = self.make_batch(Path(temporary))
+            messages = Messages(label_result=False)
+            service = Service(messages)
+            receipt_path = Path(temporary) / "receipt.json"
+            with self.assertRaises(module.PilotMailError):
+                module.send_batch(
+                    manifest,
+                    expected_account="pilot@example.test",
+                    label="BelegDock-Pilot",
+                    execute=True,
+                    service=service,
+                    receipt_path=receipt_path,
+                )
+            self.assertEqual(len(messages.send_calls), 1)
+            self.assertEqual(len(messages.modify_calls), 1)
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual(receipt["outcome"], "sent_label_unknown")
+            self.assertEqual(receipt["messageId"], "message-1")
+
+    def test_post_send_receipt_failure_preserves_remote_state_in_error(self):
+        module = self.load_module()
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = self.make_batch(Path(temporary))
+            messages = Messages()
+            service = Service(messages)
+            with patch.object(module, "_replace_receipt", side_effect=module.PilotMailError("disk full")):
+                with self.assertRaisesRegex(module.PilotMailError, "message-1"):
+                    module.send_batch(
+                        manifest,
+                        expected_account="pilot@example.test",
+                        label="BelegDock-Pilot",
+                        execute=True,
+                        service=service,
+                        receipt_path=Path(temporary) / "receipt.json",
+                    )
+            self.assertEqual(len(messages.send_calls), 1)
+            self.assertEqual(len(messages.modify_calls), 1)
+
     def test_alternate_receipt_path_cannot_bypass_batch_claim(self):
         module = self.load_module()
         with tempfile.TemporaryDirectory() as temporary:

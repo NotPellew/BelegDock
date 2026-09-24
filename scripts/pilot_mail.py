@@ -302,6 +302,17 @@ def _replace_receipt(path: Path, receipt: dict[str, Any]) -> None:
             pass
 
 
+def _persist_receipt(path: Path, receipt: dict[str, Any], context: str) -> None:
+    try:
+        _replace_receipt(path, receipt)
+    except PilotMailError as error:
+        message_id = receipt.get("messageId")
+        suffix = f" Message ID: {message_id}." if isinstance(message_id, str) and message_id else ""
+        raise PilotMailError(
+            f"{context}; delivery receipt could not be persisted; do not retry.{suffix}"
+        ) from error
+
+
 def send_batch(
     manifest_path: Path,
     *,
@@ -371,34 +382,48 @@ def send_batch(
             if status is not None:
                 receipt["httpStatus"] = status
             message = "Gmail send outcome is uncertain; do not retry"
-        _replace_receipt(receipt_file, receipt)
+        _persist_receipt(receipt_file, receipt, message)
         raise PilotMailError(message) from error
     message_id = result.get("id") if isinstance(result, dict) else None
     if not isinstance(message_id, str) or not message_id:
         receipt["outcome"] = "send_uncertain"
         receipt["remoteState"] = "unknown"
-        _replace_receipt(receipt_file, receipt)
+        _persist_receipt(
+            receipt_file,
+            receipt,
+            "Gmail send returned no message ID; do not retry",
+        )
         raise PilotMailError("Gmail send returned no message ID; do not retry")
     receipt["messageId"] = message_id
     try:
-        messages.modify(
+        label_result = messages.modify(
             userId="me",
             id=message_id,
             body={"addLabelIds": [label_id]},
         ).execute()
+        if not isinstance(label_result, dict) or label_result.get("id") != message_id:
+            raise ValueError("invalid label response")
     except Exception as error:
         receipt["outcome"] = "sent_label_unknown"
         receipt["remoteState"] = "label_unknown"
         status = _http_status(error)
         if status is not None:
             receipt["httpStatus"] = status
-        _replace_receipt(receipt_file, receipt)
+        _persist_receipt(
+            receipt_file,
+            receipt,
+            "Gmail message was sent but label state is unknown; do not resend",
+        )
         raise PilotMailError(
             "Gmail message was sent but label state is unknown; do not resend"
         ) from error
     receipt["outcome"] = "sent"
     receipt["remoteState"] = "labeled"
-    _replace_receipt(receipt_file, receipt)
+    _persist_receipt(
+        receipt_file,
+        receipt,
+        "Gmail message was sent and labeled; do not retry",
+    )
     return receipt
 
 

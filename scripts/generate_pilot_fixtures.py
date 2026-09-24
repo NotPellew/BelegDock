@@ -258,8 +258,11 @@ def _validate_batch(
     batch: Path,
     template_dir: Path = TEMPLATE_DIR,
 ) -> tuple[dict[str, Any], dict[str, bytes]]:
-    batch = Path(batch).expanduser().resolve()
-    if not batch.is_dir() or batch.is_symlink():
+    raw_batch = Path(batch).expanduser()
+    if raw_batch.is_symlink():
+        raise FixtureError("fixture batch directory must not be a symlink")
+    batch = raw_batch.resolve()
+    if not batch.is_dir():
         raise FixtureError("fixture batch directory is unavailable")
     manifest_path = batch / "manifest.json"
     _regular_file(manifest_path)
@@ -332,10 +335,8 @@ def make_parser() -> argparse.ArgumentParser:
     generate = commands.add_parser("generate")
     generate.add_argument("--output", required=True, type=Path)
     generate.add_argument("--run-id", required=True)
-    generate.add_argument("--templates", type=Path, default=TEMPLATE_DIR)
     validate = commands.add_parser("validate")
     validate.add_argument("--batch", required=True, type=Path)
-    validate.add_argument("--templates", type=Path, default=TEMPLATE_DIR)
     return parser
 
 
@@ -343,9 +344,9 @@ def main(argv: list[str] | None = None) -> int:
     args = make_parser().parse_args(argv)
     try:
         if args.command == "generate":
-            result = generate_batch(args.output, args.run_id, args.templates)
+            result = generate_batch(args.output, args.run_id)
         else:
-            result = validate_batch(args.batch, args.templates)
+            result = validate_batch(args.batch)
     except (FixtureError, OSError, ValueError) as error:
         print(f"pilot fixture operation failed: {error}", file=sys.stderr)
         return 2
