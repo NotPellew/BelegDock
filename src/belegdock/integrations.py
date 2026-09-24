@@ -7,6 +7,7 @@ from pathlib import PurePath
 from typing import Any
 from urllib.parse import quote
 
+from .classification import CandidateClassification, classify_candidate
 from .workflow import DocumentRejected
 
 MAX_FILE_SIZE = 5_000_000
@@ -23,15 +24,35 @@ def _decode_base64url(value: str) -> bytes:
         raise ValueError("attachment data is invalid") from error
 
 
+def _message_context(payload: Mapping[str, Any]) -> dict[str, str]:
+    context: dict[str, str] = {}
+    headers = payload.get("headers", [])
+    if not isinstance(headers, list):
+        return context
+    for header in headers:
+        if not isinstance(header, Mapping):
+            continue
+        name = header.get("name")
+        value = header.get("value")
+        if not isinstance(name, str) or not isinstance(value, str):
+            continue
+        normalized_name = name.casefold()
+        if normalized_name in {"subject", "from"} and normalized_name not in context:
+            context[normalized_name] = value
+    return context
+
+
 class GmailAdapter:
     def __init__(self, service: Any):
         self.service = service
+        self._candidate_classifications: dict[str, CandidateClassification] = {}
 
     def labels(self) -> list[str]:
         labels = self.service.users().labels().list(userId="me").execute().get("labels", [])
         return [item["name"] for item in labels if isinstance(item, Mapping) and isinstance(item.get("name"), str)]
 
     def candidates(self, label_name: str) -> list[dict[str, Any]]:
+        self._candidate_classifications = {}
         labels = self.service.users().labels().list(userId="me").execute().get("labels", [])
         label_id = next((item.get("id") for item in labels if item.get("name") == label_name), None)
         if not label_id:
@@ -51,14 +72,26 @@ class GmailAdapter:
                 message = self.service.users().messages().get(
                     userId="me", id=message_id, format="full"
                 ).execute()
-                self._collect_parts(message_id, message.get("payload", {}), candidates)
+                payload = message.get("payload", {})
+                context = _message_context(payload if isinstance(payload, Mapping) else {})
+                self._collect_parts(message_id, payload, candidates, context)
             page_token = page.get("nextPageToken")
             if not page_token:
                 break
         return candidates
 
+    def candidate_classification(self, candidate_id: str) -> CandidateClassification:
+        try:
+            return self._candidate_classifications[candidate_id]
+        except KeyError as error:
+            raise ValueError("Gmail candidate classification is unavailable") from error
+
     def _collect_parts(
-        self, message_id: str, part: Mapping[str, Any], candidates: list[dict[str, Any]]
+        self,
+        message_id: str,
+        part: Mapping[str, Any],
+        candidates: list[dict[str, Any]],
+        context: Mapping[str, str],
     ) -> None:
         filename = part.get("filename")
         suffix = PurePath(filename).suffix.lower() if isinstance(filename, str) else ""
@@ -85,6 +118,12 @@ class GmailAdapter:
                     "filename": filename,
                     "size": size,
                 }
+                classification = classify_candidate(
+                    filename,
+                    subject=context.get("subject", ""),
+                    sender=context.get("from", ""),
+                )
+                self._candidate_classifications[candidate["id"]] = classification
                 if attachment_id:
                     candidate["attachment_id"] = attachment_id
                 elif inline_data is not None:
@@ -92,7 +131,7 @@ class GmailAdapter:
                 candidates.append(candidate)
         for child in part.get("parts", []) or []:
             if isinstance(child, Mapping):
-                self._collect_parts(message_id, child, candidates)
+                self._collect_parts(message_id, child, candidates, context)
 
     def fetch(self, candidate: Mapping[str, Any]) -> bytes:
         expected_size = candidate.get("size")

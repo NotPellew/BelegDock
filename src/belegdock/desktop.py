@@ -7,6 +7,7 @@ import sys
 from threading import Lock
 from typing import Any
 
+from .classification import CandidateClassification, lookup_candidate_classification
 from .service import refresh_remote_inventory
 from .workflow import DocumentRejected, Store
 
@@ -53,6 +54,25 @@ _STATUS_LABELS = {
     "uploading": _("Wird gesendet"),
     "rejected": _("Abgelehnt"),
 }
+_DOCUMENT_TYPE_LABELS = {
+    "invoice": _("Rechnung"),
+    "credit_note": _("Gutschrift"),
+    "receipt": _("Beleg"),
+    "unknown": _("Unbekannt"),
+}
+_RECOMMENDATION_LABELS = {
+    "likely": _("Wahrscheinlich"),
+    "unclear": _("Unklar"),
+    "unlikely": _("Unwahrscheinlich"),
+}
+
+
+def document_type_label(document_type: str) -> str:
+    return _DOCUMENT_TYPE_LABELS.get(document_type, _("Unbekannt"))
+
+
+def recommendation_label(recommendation: str) -> str:
+    return _RECOMMENDATION_LABELS.get(recommendation, _("Unklar"))
 
 
 def status_label(status_code: str) -> str:
@@ -80,6 +100,9 @@ class DesktopService:
             {"id": candidate["id"], "filename": candidate["filename"], "size": candidate["size"]}
             for candidate in self.gmail.candidates(label)
         ]
+
+    def candidate_classification(self, candidate: dict[str, Any]) -> CandidateClassification:
+        return lookup_candidate_classification(self.gmail, candidate)
 
     def stage(self, label: str, selected_ids: Sequence[str]) -> list[str]:
         with self._operation():
@@ -235,8 +258,13 @@ class DesktopApplication:
         self.candidates_view = self._build_tree(
             self.choose_section,
             row=3,
-            columns=("filename", "size"),
-            headings={"filename": _("Dateiname"), "size": _("Größe")},
+            columns=("filename", "document_type", "recommendation", "size"),
+            headings={
+                "filename": _("Dateiname"),
+                "document_type": _("Dokumenttyp"),
+                "recommendation": _("Empfehlung"),
+                "size": _("Größe"),
+            },
             selectmode="extended",
         )
         self.candidates_view.bind("<Return>", lambda _event: self._stage())
@@ -457,7 +485,11 @@ class DesktopApplication:
         for column, heading in headings.items():
             view.heading(column, text=heading)
         if "filename" in columns:
-            view.column("filename", width=340, minwidth=180, stretch=True, anchor="w")
+            view.column("filename", width=260, minwidth=160, stretch=True, anchor="w")
+        if "document_type" in columns:
+            view.column("document_type", width=120, minwidth=100, stretch=False, anchor="w")
+        if "recommendation" in columns:
+            view.column("recommendation", width=130, minwidth=110, stretch=False, anchor="w")
         if "size" in columns:
             view.column("size", width=110, minwidth=80, stretch=False, anchor="e")
         view.grid(row=0, column=0, sticky="nsew")
@@ -512,8 +544,16 @@ class DesktopApplication:
             self.notice.set(_safe_error("candidates", error))
             return
         for candidate in candidates:
+            classification = self.service.candidate_classification(candidate)
             row = self.candidates_view.insert(
-                "", "end", values=(candidate["filename"], format_size(candidate["size"]))
+                "",
+                "end",
+                values=(
+                    candidate["filename"],
+                    document_type_label(classification.document_type),
+                    recommendation_label(classification.recommendation),
+                    format_size(candidate["size"]),
+                ),
             )
             self._candidate_ids[row] = candidate["id"]
         self.notice.set(
