@@ -79,9 +79,14 @@ NEEDS-REFINEMENT and say what to check. Look for dependencies stated in issue
 bodies and for assumptions changed by newer source, tests, packaging, or docs.
 
 Return one concise Markdown report. Start with the checkout revision supplied in
-the run request and the issue snapshot time. For each issue, give its number,
-title, one classification, a concrete reason, repository file references with
-line numbers where applicable, issue dependency numbers/states, and the next
-human action. Clearly mark tentative conclusions. End with cross-issue
-dependencies and limits of this snapshot. Do not edit files, run commands,
-change labels, comment on issues, create PRs, or make product decisions.
+the run request and the issue snapshot time, exactly as
+`**Checkout revision:** \`SHA\`` and `**Issue snapshot:** \`TIMESTAMP\``.
+For each issue, use a heading `## #NUMBER — EXACT ISSUE TITLE`, then a single
+`**Classification: STATUS.**` line and a single-line
+`**Next human action:** ...` paragraph. Give a concrete reason, repository file
+references with line numbers where applicable, and issue dependency
+numbers/states. The next action must be a short, specific question or step a
+human can answer from the issue on a phone; omit user mentions, external links,
+credentials, and sensitive data. Clearly mark tentative conclusions. End with
+cross-issue dependencies and limits of this snapshot. Do not edit files, run
+commands, change labels, comment on issues, create PRs, or make product decisions.
