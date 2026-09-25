@@ -49,15 +49,19 @@ jobs:
       OPENCODE_DISABLE_AUTOUPDATE: "1"
       OPENCODE_DISABLE_LSP_DOWNLOAD: "1"
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "1"
-      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/belegdock-implementation-venv
       ISSUE_NUMBER: ${{ github.event.issue.number }}
-      IMPLEMENTATION_EVIDENCE: ${{ runner.temp }}/belegdock-implementation
       APPROVER_TYPE: ${{ github.event.sender.type }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Set runner-local paths
+        run: |
+          printf '%s\n' \
+            "UV_PROJECT_ENVIRONMENT=$RUNNER_TEMP/belegdock-implementation-venv" \
+            "IMPLEMENTATION_EVIDENCE=$RUNNER_TEMP/belegdock-implementation" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:
