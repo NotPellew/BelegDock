@@ -82,11 +82,14 @@ Return one concise Markdown report. Start with the checkout revision supplied in
 the run request and the issue snapshot time, exactly as
 `**Checkout revision:** \`SHA\`` and `**Issue snapshot:** \`TIMESTAMP\``.
 For each issue, use a heading `## #NUMBER — EXACT ISSUE TITLE`, then a single
-`**Classification: STATUS.**` line and a single-line
-`**Next human action:** ...` paragraph. Give a concrete reason, repository file
-references with line numbers where applicable, and issue dependency
-numbers/states. The next action must be a short, specific question or step a
-human can answer from the issue on a phone; omit user mentions, external links,
-credentials, and sensitive data. Clearly mark tentative conclusions. End with
-cross-issue dependencies and limits of this snapshot. Do not edit files, run
-commands, change labels, comment on issues, create PRs, or make product decisions.
+standalone `**Classification: STATUS.**` line containing only that field, followed
+by a single-line `**Next human action:** ...` paragraph. Do not append tentative
+notes, explanations, or other text to the classification line. Put any tentative
+qualification in the rationale after the next-action paragraph. Give a concrete
+reason, repository file references with line numbers where applicable, and issue
+dependency numbers/states. The next action must be a short, specific question or
+step a human can answer from the issue on a phone; omit user mentions, external
+links, credentials, and sensitive data. Clearly mark tentative conclusions in
+the rationale. End with cross-issue dependencies and limits of this snapshot. Do
+not edit files, run commands, change labels, comment on issues, create PRs, or
+make product decisions.
