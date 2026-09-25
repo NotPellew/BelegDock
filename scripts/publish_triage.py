@@ -22,7 +22,7 @@ MARKER = "<!-- BelegDock triage-scout v1: "
 ISSUE_HEADING = re.compile(r"^## #([1-9]\d*) — ([^\n]+)$", re.MULTILINE)
 REVISION = re.compile(r"^\*\*Checkout revision:\*\* `([0-9a-f]{40})`\s*$", re.MULTILINE)
 SNAPSHOT = re.compile(r"^\*\*Issue snapshot:\*\* `\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ`\s*$", re.MULTILINE)
-CLASSIFICATION = re.compile(r"^\*\*Classification: ([A-Z-]+)\.\*\*[ \t]*$", re.MULTILINE)
+CLASSIFICATION = re.compile(r"^\*\*Classification: ([A-Z-]+)\.\*\*$", re.MULTILINE)
 ACTION = re.compile(r"^\*\*Next human action:\*\* (.+)$", re.MULTILINE)
 
 
