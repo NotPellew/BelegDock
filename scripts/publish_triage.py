@@ -157,6 +157,7 @@ class GitHubApi:
             headers={
                 "Accept": "application/vnd.github+json",
                 "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
                 "X-GitHub-Api-Version": "2022-11-28",
                 "User-Agent": "BelegDock-triage-scout",
             },
