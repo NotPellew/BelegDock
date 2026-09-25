@@ -11,13 +11,14 @@ to stop a run before coding or publication, or cancel an active run from the
 Actions page.
 
 The worker uses the existing `OPENCODE_API_KEY` secret and the configured free
-`opencode/space-bunny-free` model. It prepares new application tests, freezes a
-test-only checkpoint, requires assertion-based RED evidence, implements only
-under `src/`, `docs/`, or `README.md`, then runs the repository's Linux checks
-and a separate read-only review session. The publisher rechecks that the issue
-is open and retains both labels, then applies only the two validated commits
-and opens a draft PR. The workflow never merges and does not modify issue labels
-or comments.
+`opencode/space-bunny-free` model. It drafts a plan, gets a separate
+read-only plan review, finalizes the plan, then prepares new application tests,
+freezes a test-only checkpoint, and requires assertion-based RED evidence. It
+implements only under `src/`, `docs/`, or `README.md`, then runs the repository's
+Linux checks and a separate read-only implementation review. The publisher
+rechecks that the issue is open and retains both labels, then applies only the
+two validated commits and opens a draft PR. The workflow never merges and does
+not modify issue labels or comments.
 
 ## Publisher setup and permissions
 
