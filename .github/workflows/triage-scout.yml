@@ -31,12 +31,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          mkdir -p "$RUNNER_TEMP/triage-scout"
           gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 500 --json number,title,body,url,updatedAt,labels > .triage-open-issues.json
           gh issue list --repo "$GITHUB_REPOSITORY" --state all --limit 500 --json number,title,state,url > .triage-issue-index.json
           git ls-files > .triage-files.txt
           test "$(jq length .triage-open-issues.json)" -lt 500
           test "$(jq length .triage-issue-index.json)" -lt 500
           python3 scripts/prepare_triage_issues.py .triage-open-issues.json .triage-issues
+          jq '[.[] | {number,title}]' .triage-open-issues.json > "$RUNNER_TEMP/triage-scout/manifest.json"
           jq -r '.[] | "#\(.number) [\(.state)] \(.title)"' .triage-issue-index.json > .triage-issue-index.txt
       - name: Run read-only scout
         env:
@@ -47,13 +49,39 @@ jobs:
         run: |
           test -n "$OPENCODE_API_KEY" || { echo 'Configure OPENCODE_API_KEY as a repository Actions secret.' >&2; exit 1; }
           opencode --version
-          opencode run --standalone --agent triage-scout --model opencode/space-bunny-free --title "BelegDock issue triage" "Classify every issue listed in .triage-issues/INDEX.md using its complete issue file, .triage-issue-index.txt, and this checkout at $GITHUB_SHA. Snapshot time: $(date -u +%Y-%m-%dT%H:%M:%SZ). Return the Markdown report only." > "$RUNNER_TEMP/triage-scout.md"
-          test -s "$RUNNER_TEMP/triage-scout.md"
+          opencode run --standalone --agent triage-scout --model opencode/space-bunny-free --title "BelegDock issue triage" "Classify every issue listed in .triage-issues/INDEX.md using its complete issue file, .triage-issue-index.txt, and this checkout at $GITHUB_SHA. Snapshot time: $(date -u +%Y-%m-%dT%H:%M:%SZ). Return the Markdown report only." > "$RUNNER_TEMP/triage-scout/triage-scout.md"
+          test -s "$RUNNER_TEMP/triage-scout/triage-scout.md"
       - name: Retain report
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: triage-scout-${{ github.run_id }}
-          path: ${{ runner.temp }}/triage-scout.md
+          path: ${{ runner.temp }}/triage-scout/
           if-no-files-found: error
           retention-days: 30
+
+  publish:
+    needs: triage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: triage-scout-${{ github.run_id }}
+          path: ${{ runner.temp }}/triage-scout
+      - name: Publish validated labels and issue comments
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/publish_triage.py \
+            --report "$RUNNER_TEMP/triage-scout/triage-scout.md" \
+            --manifest "$RUNNER_TEMP/triage-scout/manifest.json" \
+            --revision "$GITHUB_SHA" \
+            --repo "$GITHUB_REPOSITORY" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
