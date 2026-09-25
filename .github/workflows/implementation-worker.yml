@@ -1,0 +1,310 @@
+name: implementation-worker
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: implementation-worker-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  publisher-preflight:
+    if: github.event.label.name == 'implementation:approved' && vars.IMPLEMENTATION_WORKER_ENABLED == 'true' && github.event.sender.type == 'User'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check publisher configuration
+        env:
+          APP_ID: ${{ vars.IMPLEMENTATION_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.IMPLEMENTATION_APP_PRIVATE_KEY }}
+        run: |
+          test -n "$APP_ID" || { echo 'Configure the IMPLEMENTATION_APP_ID repository variable.' >&2; exit 1; }
+          test -n "$APP_PRIVATE_KEY" || { echo 'Configure the IMPLEMENTATION_APP_PRIVATE_KEY repository secret.' >&2; exit 1; }
+
+      - uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.IMPLEMENTATION_APP_ID }}
+          private-key: ${{ secrets.IMPLEMENTATION_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+  implement:
+    if: github.event.label.name == 'implementation:approved' && vars.IMPLEMENTATION_WORKER_ENABLED == 'true'
+    needs: publisher-preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      issues: read
+    env:
+      OPENCODE_DISABLE_AUTOUPDATE: "1"
+      OPENCODE_DISABLE_LSP_DOWNLOAD: "1"
+      OPENCODE_DISABLE_DEFAULT_PLUGINS: "1"
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      APPROVER_TYPE: ${{ github.event.sender.type }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set runner-local paths
+        run: |
+          printf '%s\n' \
+            "UV_PROJECT_ENVIRONMENT=$RUNNER_TEMP/belegdock-implementation-venv" \
+            "IMPLEMENTATION_EVIDENCE=$RUNNER_TEMP/belegdock-implementation" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install pinned OpenCode 2 CLI
+        run: npm install --global @opencode/cli@2.0.16
+
+      - name: Confirm human approval and snapshot issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$IMPLEMENTATION_EVIDENCE"
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > "$IMPLEMENTATION_EVIDENCE/issue.json"
+          jq -e '(.state == "open") and ([.labels[].name] | index("triage:ready") != null) and ([.labels[].name] | index("implementation:approved") != null)' "$IMPLEMENTATION_EVIDENCE/issue.json" >/dev/null
+          test "$APPROVER_TYPE" = "User" || { echo 'Implementation approval must be applied by a human account.' >&2; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/collaborators/$GITHUB_ACTOR/permission" > "$IMPLEMENTATION_EVIDENCE/approver.json"
+          jq -e '.permission == "admin" or .permission == "write"' "$IMPLEMENTATION_EVIDENCE/approver.json" >/dev/null
+          if jq -r '.title, (.body // "")' "$IMPLEMENTATION_EVIDENCE/issue.json" | grep -Eiq 'gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'; then
+            echo 'Issue text resembles a credential; redact it before approval.' >&2
+            exit 1
+          fi
+          jq -r '"# Issue \(.number): \(.title)\n\nSource: \(.html_url)\n\n\(.body // "")"' "$IMPLEMENTATION_EVIDENCE/issue.json" > .implementation-issue.md
+          rm -f "$IMPLEMENTATION_EVIDENCE/issue.json" "$IMPLEMENTATION_EVIDENCE/approver.json"
+          git switch -c "automation/issue-$ISSUE_NUMBER-$GITHUB_RUN_ID"
+
+      - name: Install development dependencies and verify baseline
+        run: |
+          uv sync --locked
+          uv run pytest tests/app -q
+          uv run python scripts/test_evidence.py snapshot --repo . --output "$IMPLEMENTATION_EVIDENCE/baseline.json"
+
+      - name: Prepare new RED tests
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          test -n "$OPENCODE_API_KEY" || { echo 'Configure OPENCODE_API_KEY as a repository Actions secret.' >&2; exit 1; }
+          if find . -path './.git' -prune -o -type l -print -quit | grep -q .; then
+            echo 'Checkout contains a symlink; refusing to expose it to the model.' >&2
+            exit 1
+          fi
+          if find . -path './.git' -prune -o -type f -name '.env*' ! -name '.env.example' -print -quit | grep -q .; then
+            echo 'Checkout contains an environment file; refusing to expose it to the model.' >&2
+            exit 1
+          fi
+          opencode --version
+          opencode run --standalone --agent implementation-tests --model opencode/space-bunny-free --title "Prepare tests for BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md and prepare focused new tests for the approved issue. Make no other changes." > "$IMPLEMENTATION_EVIDENCE/test-preparation.md"
+          sed -n '1p' "$IMPLEMENTATION_EVIDENCE/test-preparation.md" | grep -Fx '**Decision gate: READY**' || { echo 'OpenCode did not confirm that the issue is implementation-ready.' >&2; exit 1; }
+          git diff --quiet || { echo 'Test preparation changed tracked files; refusing to continue.' >&2; exit 1; }
+          mapfile -d '' candidates < <(git ls-files --others --exclude-standard -z)
+          new_tests=()
+          for path in "${candidates[@]}"; do
+            case "$path" in
+              .implementation-issue.md) ;;
+              tests/app/test_*.py)
+                test -f "$path" && test ! -L "$path" || { echo "Invalid new test file: $path" >&2; exit 1; }
+                new_tests+=("$path")
+                ;;
+              *) echo "Test preparation wrote an unapproved path: $path" >&2; exit 1 ;;
+            esac
+          done
+          test "${#new_tests[@]}" -gt 0 || { echo 'No new application tests were prepared; refusing to implement.' >&2; exit 1; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "${new_tests[@]}"
+          git commit -m "test: freeze issue #$ISSUE_NUMBER RED tests"
+          uv run python scripts/test_evidence.py snapshot --repo . --output "$IMPLEMENTATION_EVIDENCE/red-snapshot.json"
+          uv run python - "$IMPLEMENTATION_EVIDENCE/baseline.json" "$IMPLEMENTATION_EVIDENCE/red-snapshot.json" "$IMPLEMENTATION_EVIDENCE/red" <<'PY'
+          import json
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          before = set(json.loads(Path(sys.argv[1]).read_text())["test_ids"])
+          after = set(json.loads(Path(sys.argv[2]).read_text())["test_ids"])
+          added = sorted(after - before)
+          if not added:
+              raise SystemExit("No test IDs were added; refusing to continue.")
+          command = ["uv", "run", "python", "scripts/test_evidence.py", "run",
+                     "--repo", ".", "--snapshot", sys.argv[2], "--output", sys.argv[3],
+                     "--phase", "red"]
+          for test_id in added:
+              command.extend(("--expected-failure", test_id))
+          subprocess.run(command, check=True)
+          PY
+
+      - name: Confirm approval remains active before coding
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > "$IMPLEMENTATION_EVIDENCE/current-issue.json"
+          jq -e '(.state == "open") and ([.labels[].name] | index("triage:ready") != null) and ([.labels[].name] | index("implementation:approved") != null)' "$IMPLEMENTATION_EVIDENCE/current-issue.json" >/dev/null
+          rm -f "$IMPLEMENTATION_EVIDENCE/current-issue.json"
+
+      - name: Implement against frozen RED tests
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          opencode run --standalone --agent implementation-worker --model opencode/space-bunny-free --title "Implement BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md and implement only the approved issue against the frozen RED tests. Do not edit tests or protected files." > "$IMPLEMENTATION_EVIDENCE/implementation.md"
+          sed -n '1p' "$IMPLEMENTATION_EVIDENCE/implementation.md" | grep -Fx '**Implementation result: COMPLETE**' || { echo 'OpenCode did not complete the implementation without a blocker.' >&2; exit 1; }
+          git diff --quiet -- tests scripts .github packaging .opencode || { echo 'Implementation changed protected tests, evidence, CI, packaging, or agent files.' >&2; exit 1; }
+          mapfile -d '' changes < <(git diff --name-only -z HEAD)
+          mapfile -d '' untracked < <(git ls-files --others --exclude-standard -z)
+          for path in "${changes[@]}" "${untracked[@]}"; do
+            case "$path" in
+              .implementation-issue.md) ;;
+              src/*|docs/*|README.md)
+                if test -e "$path"; then test -f "$path" && test ! -L "$path" || { echo "Invalid implementation path: $path" >&2; exit 1; }; fi
+                ;;
+              *) echo "Implementation wrote an unapproved path: $path" >&2; exit 1 ;;
+            esac
+          done
+          test "${#changes[@]}" -gt 0 -o "${#untracked[@]}" -gt 1 || { echo 'Implementation produced no allowed changes.' >&2; exit 1; }
+
+      - name: Verify implementation
+        run: |
+          uv run python scripts/test_evidence.py run --repo . --snapshot "$IMPLEMENTATION_EVIDENCE/red-snapshot.json" --output "$IMPLEMENTATION_EVIDENCE/green" --phase green
+          uv run pytest tests/app -q
+          uv run ruff check .
+          uv run mypy src
+          uv run python -m unittest discover -s tests/evidence -v
+          uv build --wheel
+          uv run python scripts/replay_red.py --repo . --verify
+          uv run python scripts/replay_red.py --repo . --output "$IMPLEMENTATION_EVIDENCE/red-replay"
+
+      - name: Review implementation in a separate read-only OpenCode session
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          git add -N -- src docs README.md
+          git diff --binary HEAD > "$IMPLEMENTATION_EVIDENCE/implementation.patch"
+          cat > "$IMPLEMENTATION_EVIDENCE/verification-summary.md" <<EOF
+          Frozen RED and GREEN evidence passed.
+          Application tests, Ruff, mypy, evidence recorder tests, wheel build, frozen RED verification, and full frozen RED replay passed.
+          EOF
+          cat "$IMPLEMENTATION_EVIDENCE/verification-summary.md" "$IMPLEMENTATION_EVIDENCE/implementation.patch" > "$IMPLEMENTATION_EVIDENCE/review-input.md"
+          opencode run --standalone --agent implementation-reviewer --model opencode/space-bunny-free --title "Review BelegDock issue #$ISSUE_NUMBER implementation" --file "$IMPLEMENTATION_EVIDENCE/review-input.md" "Review .implementation-issue.md against the repository instructions. Inspect the attached implementation diff and verification summary. Return the required review verdict." > "$IMPLEMENTATION_EVIDENCE/review.md"
+          sed -n '1p' "$IMPLEMENTATION_EVIDENCE/review.md" | grep -Fx '**Review verdict: PASS**'
+          git diff --quiet -- tests scripts .github packaging .opencode
+
+      - name: Recheck after review
+        run: |
+          uv run pytest tests/app -q
+          uv run python scripts/replay_red.py --repo . --verify
+
+      - name: Prepare changes for the publisher
+        run: |
+          git add -- src docs README.md
+          git diff --cached --quiet && { echo 'No implementation changes were staged.' >&2; exit 1; }
+          git commit -m "feat: implement issue #$ISSUE_NUMBER"
+          git format-patch --binary --output-directory "$IMPLEMENTATION_EVIDENCE/patches" "$GITHUB_SHA..HEAD"
+          rm -f .implementation-issue.md
+
+      - name: Retain implementation and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: implementation-${{ github.run_id }}
+          path: ${{ runner.temp }}/belegdock-implementation/
+          if-no-files-found: warn
+          retention-days: 90
+
+  publish-draft:
+    needs: implement
+    if: needs.implement.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: implementation-${{ github.run_id }}
+          path: ${{ runner.temp }}/belegdock-implementation
+
+      - name: Confirm approval remains active before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER" > "$RUNNER_TEMP/current-issue.json"
+          jq -e '(.state == "open") and ([.labels[].name] | index("triage:ready") != null) and ([.labels[].name] | index("implementation:approved") != null)' "$RUNNER_TEMP/current-issue.json" >/dev/null
+
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.IMPLEMENTATION_APP_ID }}
+          private-key: ${{ secrets.IMPLEMENTATION_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Apply reviewed commits and validate file scope
+        env:
+          PATCH_DIRECTORY: ${{ runner.temp }}/belegdock-implementation/patches
+        run: |
+          shopt -s nullglob
+          patches=("$PATCH_DIRECTORY"/*.patch)
+          test "${#patches[@]}" -eq 2 || { echo 'Expected one test checkpoint and one implementation commit.' >&2; exit 1; }
+          git -c core.hooksPath=/dev/null am "${patches[@]}"
+          commits=( $(git rev-list --reverse "$GITHUB_SHA..HEAD") )
+          test "${#commits[@]}" -eq 2 || { echo 'Unexpected commit count.' >&2; exit 1; }
+          first_paths=$(git diff-tree --no-renames --no-commit-id --name-status -r "${commits[0]}")
+          while IFS=$'\t' read -r status path; do
+            test -z "$path" && continue
+            test "$status" = "A" || { echo "Test checkpoint modified or removed an existing path: $path" >&2; exit 1; }
+            case "$path" in tests/app/test_*.py) ;; *) echo "Test checkpoint changed an unapproved path: $path" >&2; exit 1 ;; esac
+          done <<< "$first_paths"
+          second_paths=$(git diff-tree --no-renames --no-commit-id --name-status -r "${commits[1]}")
+          while IFS=$'\t' read -r status path; do
+            test -z "$path" && continue
+            case "$path" in src/*|docs/*|README.md) ;; *) echo "Implementation changed an unapproved path: $path" >&2; exit 1 ;; esac
+          done <<< "$second_paths"
+          test -n "$first_paths" && test -n "$second_paths" || { echo 'Both checkpoint and implementation commits must contain changes.' >&2; exit 1; }
+
+      - name: Push branch and open draft PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          branch="automation/issue-$ISSUE_NUMBER-$GITHUB_RUN_ID"
+          git push origin "HEAD:refs/heads/$branch"
+          cat > "$RUNNER_TEMP/draft-pr-body.md" <<EOF
+          Implements #$ISSUE_NUMBER.
+
+          This draft was prepared by the issue-approved OpenCode workflow. The workflow completed the frozen RED/GREEN evidence, application checks, frozen RED replay, and a separate read-only review session.
+
+          Review the retained run evidence before requesting merge: $RUN_URL
+
+          This workflow never merges pull requests.
+          EOF
+          gh pr create --draft --base main --head "$branch" --title "Implement #$ISSUE_NUMBER: $ISSUE_TITLE" --body-file "$RUNNER_TEMP/draft-pr-body.md"
