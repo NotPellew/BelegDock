@@ -1,4 +1,15 @@
-from scripts.publish_triage import parse_report
+import importlib.util
+from pathlib import Path
+import sys
+
+
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "publish_triage.py"
+SPEC = importlib.util.spec_from_file_location("belegdock_publish_triage_markdown_break", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
+SPEC.loader.exec_module(MODULE)
+parse_report = MODULE.parse_report
 
 
 def test_report_accepts_markdown_hard_break_after_classification() -> None:
