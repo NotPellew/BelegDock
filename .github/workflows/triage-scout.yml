@@ -36,6 +36,8 @@ jobs:
           git ls-files > .triage-files.txt
           test "$(jq length .triage-open-issues.json)" -lt 500
           test "$(jq length .triage-issue-index.json)" -lt 500
+          python3 scripts/prepare_triage_issues.py .triage-open-issues.json .triage-issues
+          jq -r '.[] | "#\(.number) [\(.state)] \(.title)"' .triage-issue-index.json > .triage-issue-index.txt
       - name: Run read-only scout
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
@@ -45,7 +47,7 @@ jobs:
         run: |
           test -n "$OPENCODE_API_KEY" || { echo 'Configure OPENCODE_API_KEY as a repository Actions secret.' >&2; exit 1; }
           opencode --version
-          opencode run --standalone --agent triage-scout --model opencode/space-bunny-free --title "BelegDock issue triage" "Classify the open issues from the two .triage-*.json snapshots against this checkout at $GITHUB_SHA. Snapshot time: $(date -u +%Y-%m-%dT%H:%M:%SZ). Return the Markdown report only." > "$RUNNER_TEMP/triage-scout.md"
+          opencode run --standalone --agent triage-scout --model opencode/space-bunny-free --title "BelegDock issue triage" "Classify every issue listed in .triage-issues/INDEX.md using its complete issue file, .triage-issue-index.txt, and this checkout at $GITHUB_SHA. Snapshot time: $(date -u +%Y-%m-%dT%H:%M:%SZ). Return the Markdown report only." > "$RUNNER_TEMP/triage-scout.md"
           test -s "$RUNNER_TEMP/triage-scout.md"
       - name: Retain report
         if: success()
