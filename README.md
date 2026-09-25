@@ -6,8 +6,9 @@ von Dokumenten an Lexware Office, ohne das Postfach zu verändern.
 ## Status
 
 Früher Machbarkeitsstand, keine Produktionsfreigabe. Offline-Tests decken Auswahl,
-Vorbereitung, Duplikate und unklare Sendeergebnisse ab. Live-Tests von Gmail bis
-Lexware akzeptierten einfache PDFs, ZUGFeRD-PDFs und eigenständige XML-Dateien,
+feste Scan-Empfehlungen, Vorbereitung, Duplikate und unklare Sendeergebnisse ab.
+Live-Tests von Gmail bis Lexware akzeptierten einfache PDFs, ZUGFeRD-PDFs und
+eigenständige XML-Dateien,
 ohne Labels oder Originalnachrichten zu verändern. Die lokale Verhinderung erneuter
 Übertragungen bestand für jedes Format; eine serverseitige Duplikatprüfung bestand
 ebenfalls für das einfache PDF. Ein fehlerhaftes XML wurde abgelehnt (406), seine
@@ -65,10 +66,21 @@ belegdock refresh
 belegdock upload SHA256_HASH
 ```
 
+Jeder `scan`-Kandidat enthält zusätzlich `documentType`, `recommendation` und
+`signals`. Die Werte `invoice`, `credit_note`, `receipt` beziehungsweise `unknown`
+und `likely`, `unclear`, `unlikely` sind deterministische Hinweise aus Dateiname,
+Betreff und Absender. Sie helfen beim Priorisieren, prüfen aber weder Inhalt noch
+Rechnungsgültigkeit. Die Kandidatenerkennung bleibt an die PDF/XML-Dateiendung
+gebunden; MIME- und Datumsangaben liefern keinen Belegtyp. Alle Kandidaten bleiben
+sichtbar und müssen weiterhin ausdrücklich ausgewählt werden. Betreff und
+Absender werden nur während des Scans für feste Signaltexte ausgewertet, nicht in
+SQLite gespeichert und nicht ausgegeben.
+
 Für die lokale Desktop-Ansicht desselben Ablaufs `belegdock desktop` ausführen.
-Ein Gmail-Label auswählen, Anhänge nach Dateiname und Größe markieren und
-„Ausgewählte Dokumente vorbereiten“ wählen. Das Vorbereiten speichert die
-ausgewählten Dateien lokal und sendet nichts an Lexware. „Dokumente prüfen“ zeigt
+Ein Gmail-Label auswählen, Anhänge nach Dateiname, Dokumenttyp, Empfehlung und
+Größe markieren und „Ausgewählte Dokumente vorbereiten“ wählen. Die Empfehlung
+ist nur eine Sortierhilfe. Das Vorbereiten speichert die ausgewählten Dateien
+lokal und sendet nichts an Lexware. „Dokumente prüfen“ zeigt
 eine kompakte Zeile pro vorbereitetem Dokument; die Auswahl einer Zeile zeigt die
 vollständigen Lexware-Datei- und Beleg-IDs mit Kopieraktionen. Das Senden eines
 vorbereiteten Dokuments erfordert eine Bestätigung. Die Desktop-Oberfläche führt

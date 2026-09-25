@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from . import __version__, accounts
+from .classification import classify_candidate_mapping
 from .integrations import GmailAdapter, LexwareAdapter
 from .desktop import DesktopUnavailableError, run_desktop
 from .service import refresh_remote_inventory as _refresh_remote_inventory
@@ -225,7 +226,7 @@ def dispatch(args: argparse.Namespace) -> Any:
         account, gmail = gmail_client()
         candidates = gmail.candidates(args.label)
         if args.command == "scan":
-            return [{key: value for key, value in candidate.items() if key not in ("inline_data", "attachment_id")} for candidate in candidates]
+            return [classify_candidate_mapping(gmail, candidate) for candidate in candidates]
         selected = set(args.select)
         if selected - {item["id"] for item in candidates}:
             raise ValueError("Unknown selection; scan the label again.")

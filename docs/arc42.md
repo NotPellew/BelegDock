@@ -1,8 +1,8 @@
 # BelegDock architecture
 
 An early CLI and Linux developer boundary are implemented. Offline verification
-covers the transfer workflow. Live Gmail retrieval/staging and mailbox preservation
-passed on Linux and native Windows. Lexware accepted plain PDF, ZUGFeRD PDF and
+covers the transfer workflow and deterministic scan recommendations. Live Gmail
+retrieval/staging and mailbox preservation passed on Linux and native Windows. Lexware accepted plain PDF, ZUGFeRD PDF and
 corrected standalone XML; local no-resend and plain-PDF server duplicate behavior
 passed. A malformed XML was rejected. A live manual reconciliation of an
 interrupted upload matched an operator-supplied remote file and voucher to the
@@ -40,9 +40,10 @@ proof and precedes public release. The bounded experiment uses Gmail API with
 gmail.readonly and a Desktop OAuth test client.
 
 The desktop UI is a thin local tkinter/ttk view over the existing workflow. It
-supports label selection, explicit staging, and one-document upload confirmation;
-it does not poll, auto-retry, or reconcile uncertain uploads. AI, OCR, invoice-link
-crawling, multiple accounts/providers, plugins, full document management, and
+supports label selection, advisory fixed-rule candidate recommendations, explicit
+staging, and one-document upload confirmation; it does not poll, auto-retry, or
+reconcile uncertain uploads. AI, OCR, invoice-link crawling, multiple
+accounts/providers, plugins, full document management, and
 legal archive/compliance claims remain deferred.
 
 ## 4. Solution strategy
@@ -56,7 +57,7 @@ do not implement protocols manually. Add dependencies when needed.
 | Responsibility | Boundary |
 | --- | --- |
 | CLI | User choices, clear outcomes, exit status |
-| Processing | Candidate selection and workflow decisions |
+| Processing | Candidate selection, metadata recommendations, workflow decisions |
 | Gmail integration | Read mail without changing it |
 | Local persistence | Processing state, document bytes, source occurrences |
 | Lexware integration | Upload and record/reconcile results |
@@ -66,7 +67,8 @@ These are module responsibilities, not separate services or a plugin system.
 
 ## 6. Runtime view
 
-1. Discover attachment candidates in the selected label without changing mail.
+1. Discover and annotate every attachment candidate in the selected label without
+   changing mail.
 2. Stage selected bytes durably and compute their SHA-256 hashes.
 3. Record document identity and every source occurrence.
 4. Refresh the organization-bound remote inventory before upload; verify an
@@ -134,6 +136,15 @@ and host sockets are not. The session gets a temporary home and /tmp.
   at 5,000,000 bytes.
 - SHA-256 identifies byte-identical documents. Keep separate source occurrences;
   do not claim detection of semantically identical invoices with different bytes.
+- Scan classification is a pure, offline rules pass over the filename plus bounded
+  Subject and From values. The existing filename-extension gate establishes
+  PDF/XML candidacy; MIME metadata and the message date do not infer a document
+  type. The classifier emits
+  fixed explanatory signals, never raw headers. German and English terms have equal
+  weight; contradictory types become `unknown`/`unclear`, sender-only evidence
+  remains advisory, and a stale optional classification falls back to the filename.
+  The result prioritizes review but never filters, selects, validates, or uploads a
+  candidate.
 - Staging survives interruptions until an upload can be resolved. Optional
   retention of original attachments follows reliable staging/upload. No automatic
   deletion policy is agreed. Defer original-email (.eml) retention and search.
@@ -171,6 +182,7 @@ and host sockets are not. The session gets a temporary home and /tmp.
 | --- | --- |
 | Scan messages | Read/unread state, labels, and message contents remain unchanged |
 | Same bytes in another message | One document identity, both source occurrences |
+| Classify scan candidates | Every PDF/XML candidate remains visible; deterministic advice uses no attachment content or persisted headers |
 | Interrupt staging/upload | No silent loss or false completion; uncertain outcomes visible |
 | Credential store unavailable | Clear failure without plaintext fallback |
 | Unsafe filename or oversized input | No path escape; bounded processing and clear rejection |
@@ -187,6 +199,11 @@ and host sockets are not. The session gets a temporary home and /tmp.
   and linked worktrees are unsupported; avoid concurrent host edits.
 - The initial Gmail adapter refuses malformed parts, including empty part IDs.
   Real account/provider edge cases remain to be established.
+- Fixed scan recommendations cover an explicit, small German/English token set.
+  Candidate discovery remains filename-extension gated. Recommendations do not
+  inspect MIME metadata or PDF/XML content, infer from the message date, or establish
+  invoice validity. Weak or conflicting metadata stays `unknown`; the separate
+  opt-in local-model evaluation remains deferred.
 - HTTP 400/406 responses from the files endpoint are documented local rejections;
   other HTTP errors, transport failures and malformed success responses remain
   uncertain. A rejected hash is never resent; corrected bytes are a new staged
