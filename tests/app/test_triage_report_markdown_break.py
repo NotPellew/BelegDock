@@ -12,6 +12,9 @@ def test_report_accepts_markdown_hard_break_after_classification() -> None:
         "**Next human action:** Decide the remaining About screen scope.\n"
     )
 
-    entries = parse_report(report, [{"number": 43, "title": title}], revision)
+    try:
+        entries = parse_report(report, [{"number": 43, "title": title}], revision)
+    except ValueError:
+        entries = []
 
     assert [(entry.number, entry.status) for entry in entries] == [(43, "STALE")]
