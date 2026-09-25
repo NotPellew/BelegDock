@@ -39,6 +39,9 @@ jobs:
       - name: Run read-only scout
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_DISABLE_AUTOUPDATE: "1"
+          OPENCODE_DISABLE_LSP_DOWNLOAD: "1"
+          OPENCODE_DISABLE_DEFAULT_PLUGINS: "1"
         run: |
           test -n "$OPENCODE_API_KEY" || { echo 'Configure OPENCODE_API_KEY as a repository Actions secret.' >&2; exit 1; }
           opencode --version
