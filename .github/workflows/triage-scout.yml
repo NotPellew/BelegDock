@@ -1,0 +1,54 @@
+name: triage-scout
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: triage-scout
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    if: github.event_name == 'workflow_dispatch' || vars.TRIAGE_SCOUT_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install pinned OpenCode 2 CLI
+        run: npm install --global @opencode/cli@2.0.16
+      - name: Snapshot GitHub issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 500 --json number,title,body,url,updatedAt,labels > .triage-open-issues.json
+          gh issue list --repo "$GITHUB_REPOSITORY" --state all --limit 500 --json number,title,state,url > .triage-issue-index.json
+          git ls-files > .triage-files.txt
+          test "$(jq length .triage-open-issues.json)" -lt 500
+          test "$(jq length .triage-issue-index.json)" -lt 500
+      - name: Run read-only scout
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          test -n "$OPENCODE_API_KEY" || { echo 'Configure OPENCODE_API_KEY as a repository Actions secret.' >&2; exit 1; }
+          opencode --version
+          opencode run --standalone --agent triage-scout --model opencode/space-bunny-free --title "BelegDock issue triage" "Classify the open issues from the two .triage-*.json snapshots against this checkout at $GITHUB_SHA. Snapshot time: $(date -u +%Y-%m-%dT%H:%M:%SZ). Return the Markdown report only." > "$RUNNER_TEMP/triage-scout.md"
+          test -s "$RUNNER_TEMP/triage-scout.md"
+      - name: Retain report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: triage-scout-${{ github.run_id }}
+          path: ${{ runner.temp }}/triage-scout.md
+          if-no-files-found: error
+          retention-days: 30
