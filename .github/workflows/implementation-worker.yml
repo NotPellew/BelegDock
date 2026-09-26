@@ -98,6 +98,38 @@ jobs:
           uv run pytest tests/app -q
           uv run python scripts/test_evidence.py snapshot --repo . --output "$IMPLEMENTATION_EVIDENCE/baseline.json"
 
+      - name: Plan the approved issue
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          test -n "$OPENCODE_API_KEY" || { echo 'Configure OPENCODE_API_KEY as a repository Actions secret.' >&2; exit 1; }
+          opencode run --standalone --agent implementation-planner --model opencode/space-bunny-free --title "Plan BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md and prepare an implementation plan only. Do not edit source, tests, documentation, or configuration." > "$IMPLEMENTATION_EVIDENCE/plan-draft.md"
+          grep -Fxq -- '**Plan status: READY**' "$IMPLEMENTATION_EVIDENCE/plan-draft.md" || { echo 'OpenCode did not confirm that the issue is ready for planning review.' >&2; exit 1; }
+          grep -Fxq -- '**Plan status: READY**' .implementation-plan.md || { echo 'The plan file is missing its READY status.' >&2; exit 1; }
+          git diff --quiet || { echo 'Planning changed tracked files; refusing to continue.' >&2; exit 1; }
+          mapfile -d '' candidates < <(git ls-files --others --exclude-standard -z)
+          test "${#candidates[@]}" -eq 2 && printf '%s\n' "${candidates[@]}" | sort | diff -u <(printf '%s\n' .implementation-issue.md .implementation-plan.md | sort) - || { echo 'Planning wrote an unapproved path.' >&2; exit 1; }
+
+      - name: Review plan in a separate read-only OpenCode session
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          opencode run --standalone --agent implementation-plan-reviewer --model opencode/space-bunny-free --title "Review plan for BelegDock issue #$ISSUE_NUMBER" --file .implementation-plan.md "Review the plan against .implementation-issue.md and repository instructions. Return the required plan review verdict and actionable findings." > "$IMPLEMENTATION_EVIDENCE/plan-review.md"
+          grep -Fxq -- '**Plan review verdict: PASS**' "$IMPLEMENTATION_EVIDENCE/plan-review.md" || { echo 'The plan review found a blocker or did not return PASS.' >&2; exit 1; }
+          git diff --quiet || { echo 'Plan review changed tracked files; refusing to continue.' >&2; exit 1; }
+          test "$(git ls-files --others --exclude-standard | sort | tr '\n' ' ')" = '.implementation-issue.md .implementation-plan.md ' || { echo 'Plan review changed an unapproved path.' >&2; exit 1; }
+
+      - name: Finalize the reviewed plan
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          opencode run --standalone --agent implementation-planner --model opencode/space-bunny-free --title "Finalize plan for BelegDock issue #$ISSUE_NUMBER" --file "$IMPLEMENTATION_EVIDENCE/plan-review.md" "Read .implementation-issue.md, .implementation-plan.md, and the attached review. Incorporate all actionable review findings and finalize only .implementation-plan.md. Do not edit source, tests, documentation, or configuration." > "$IMPLEMENTATION_EVIDENCE/plan-finalization.md"
+          grep -Fxq -- '**Plan status: FINAL**' "$IMPLEMENTATION_EVIDENCE/plan-finalization.md" || { echo 'OpenCode did not confirm plan finalization.' >&2; exit 1; }
+          grep -Fxq -- '**Plan status: FINAL**' .implementation-plan.md || { echo 'The plan file is missing its FINAL status.' >&2; exit 1; }
+          git diff --quiet || { echo 'Plan finalization changed tracked files; refusing to continue.' >&2; exit 1; }
+          test "$(git ls-files --others --exclude-standard | sort | tr '\n' ' ')" = '.implementation-issue.md .implementation-plan.md ' || { echo 'Plan finalization changed an unapproved path.' >&2; exit 1; }
+          cp .implementation-plan.md "$IMPLEMENTATION_EVIDENCE/final-plan.md"
+
       - name: Prepare new RED tests
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
@@ -112,14 +144,14 @@ jobs:
             exit 1
           fi
           opencode --version
-          opencode run --standalone --agent implementation-tests --model opencode/space-bunny-free --title "Prepare tests for BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md and prepare focused new tests for the approved issue. Make no other changes." > "$IMPLEMENTATION_EVIDENCE/test-preparation.md"
-          sed -n '1p' "$IMPLEMENTATION_EVIDENCE/test-preparation.md" | grep -Fx '**Decision gate: READY**' || { echo 'OpenCode did not confirm that the issue is implementation-ready.' >&2; exit 1; }
+          opencode run --standalone --agent implementation-tests --model opencode/space-bunny-free --title "Prepare tests for BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md and the finalized .implementation-plan.md. Prepare focused new tests that cover the approved acceptance criteria and plan. Make no other changes." > "$IMPLEMENTATION_EVIDENCE/test-preparation.md"
+          grep -Fxq -- '**Decision gate: READY**' "$IMPLEMENTATION_EVIDENCE/test-preparation.md" || { echo 'OpenCode did not confirm that the issue is implementation-ready.' >&2; exit 1; }
           git diff --quiet || { echo 'Test preparation changed tracked files; refusing to continue.' >&2; exit 1; }
           mapfile -d '' candidates < <(git ls-files --others --exclude-standard -z)
           new_tests=()
           for path in "${candidates[@]}"; do
             case "$path" in
-              .implementation-issue.md) ;;
+              .implementation-issue.md|.implementation-plan.md) ;;
               tests/app/test_*.py)
                 test -f "$path" && test ! -L "$path" || { echo "Invalid new test file: $path" >&2; exit 1; }
                 new_tests+=("$path")
@@ -164,14 +196,14 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
-          opencode run --standalone --agent implementation-worker --model opencode/space-bunny-free --title "Implement BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md and implement only the approved issue against the frozen RED tests. Do not edit tests or protected files." > "$IMPLEMENTATION_EVIDENCE/implementation.md"
+          opencode run --standalone --agent implementation-worker --model opencode/space-bunny-free --title "Implement BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md, the finalized .implementation-plan.md, and implement only that approved plan against the frozen RED tests. Do not edit tests or protected files." > "$IMPLEMENTATION_EVIDENCE/implementation.md"
           sed -n '1p' "$IMPLEMENTATION_EVIDENCE/implementation.md" | grep -Fx '**Implementation result: COMPLETE**' || { echo 'OpenCode did not complete the implementation without a blocker.' >&2; exit 1; }
           git diff --quiet -- tests scripts .github packaging .opencode || { echo 'Implementation changed protected tests, evidence, CI, packaging, or agent files.' >&2; exit 1; }
           mapfile -d '' changes < <(git diff --name-only -z HEAD)
           mapfile -d '' untracked < <(git ls-files --others --exclude-standard -z)
           for path in "${changes[@]}" "${untracked[@]}"; do
             case "$path" in
-              .implementation-issue.md) ;;
+              .implementation-issue.md|.implementation-plan.md) ;;
               src/*|docs/*|README.md)
                 if test -e "$path"; then test -f "$path" && test ! -L "$path" || { echo "Invalid implementation path: $path" >&2; exit 1; }; fi
                 ;;
@@ -201,8 +233,8 @@ jobs:
           Frozen RED and GREEN evidence passed.
           Application tests, Ruff, mypy, evidence recorder tests, wheel build, frozen RED verification, and full frozen RED replay passed.
           EOF
-          cat "$IMPLEMENTATION_EVIDENCE/verification-summary.md" "$IMPLEMENTATION_EVIDENCE/implementation.patch" > "$IMPLEMENTATION_EVIDENCE/review-input.md"
-          opencode run --standalone --agent implementation-reviewer --model opencode/space-bunny-free --title "Review BelegDock issue #$ISSUE_NUMBER implementation" --file "$IMPLEMENTATION_EVIDENCE/review-input.md" "Review .implementation-issue.md against the repository instructions. Inspect the attached implementation diff and verification summary. Return the required review verdict." > "$IMPLEMENTATION_EVIDENCE/review.md"
+          cat "$IMPLEMENTATION_EVIDENCE/final-plan.md" "$IMPLEMENTATION_EVIDENCE/verification-summary.md" "$IMPLEMENTATION_EVIDENCE/implementation.patch" > "$IMPLEMENTATION_EVIDENCE/review-input.md"
+          opencode run --standalone --agent implementation-reviewer --model opencode/space-bunny-free --title "Review BelegDock issue #$ISSUE_NUMBER implementation" --file "$IMPLEMENTATION_EVIDENCE/review-input.md" "Review .implementation-issue.md and the finalized plan against the repository instructions. Inspect the attached plan, implementation diff, and verification summary. Return the required review verdict." > "$IMPLEMENTATION_EVIDENCE/review.md"
           sed -n '1p' "$IMPLEMENTATION_EVIDENCE/review.md" | grep -Fx '**Review verdict: PASS**'
           git diff --quiet -- tests scripts .github packaging .opencode
 
@@ -217,7 +249,7 @@ jobs:
           git diff --cached --quiet && { echo 'No implementation changes were staged.' >&2; exit 1; }
           git commit -m "feat: implement issue #$ISSUE_NUMBER"
           git format-patch --binary --output-directory "$IMPLEMENTATION_EVIDENCE/patches" "$GITHUB_SHA..HEAD"
-          rm -f .implementation-issue.md
+          rm -f .implementation-issue.md .implementation-plan.md
 
       - name: Retain implementation and evidence
         if: always()
