@@ -207,7 +207,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
           opencode run --standalone --agent implementation-worker --model opencode/space-bunny-free --title "Implement BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md, the finalized .implementation-plan.md, and implement only that approved plan against the frozen RED tests. Do not edit tests or protected files." > "$IMPLEMENTATION_EVIDENCE/implementation.md"
-          sed -n '1p' "$IMPLEMENTATION_EVIDENCE/implementation.md" | grep -Fx '**Implementation result: COMPLETE**' || { echo 'OpenCode did not complete the implementation without a blocker.' >&2; exit 1; }
+          grep -Fxq -- '**Implementation result: COMPLETE**' "$IMPLEMENTATION_EVIDENCE/implementation.md" || { echo 'OpenCode did not complete the implementation without a blocker.' >&2; exit 1; }
           git diff --quiet -- tests scripts .github packaging .opencode || { echo 'Implementation changed protected tests, evidence, CI, packaging, or agent files.' >&2; exit 1; }
           mapfile -d '' changes < <(git diff --name-only -z HEAD)
           mapfile -d '' untracked < <(git ls-files --others --exclude-standard -z)
@@ -245,7 +245,7 @@ jobs:
           EOF
           cat "$IMPLEMENTATION_EVIDENCE/final-plan.md" "$IMPLEMENTATION_EVIDENCE/verification-summary.md" "$IMPLEMENTATION_EVIDENCE/implementation.patch" > "$IMPLEMENTATION_EVIDENCE/review-input.md"
           opencode run --standalone --agent implementation-reviewer --model opencode/space-bunny-free --title "Review BelegDock issue #$ISSUE_NUMBER implementation" --file "$IMPLEMENTATION_EVIDENCE/review-input.md" "Review .implementation-issue.md and the finalized plan against the repository instructions. Inspect the attached plan, implementation diff, and verification summary. Return the required review verdict." > "$IMPLEMENTATION_EVIDENCE/review.md"
-          sed -n '1p' "$IMPLEMENTATION_EVIDENCE/review.md" | grep -Fx '**Review verdict: PASS**'
+          grep -Fxq -- '**Review verdict: PASS**' "$IMPLEMENTATION_EVIDENCE/review.md" || { echo 'OpenCode did not return a passing implementation review.' >&2; exit 1; }
           git diff --quiet -- tests scripts .github packaging .opencode
 
       - name: Recheck after review
