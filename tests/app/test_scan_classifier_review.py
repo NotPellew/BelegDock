@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 from belegdock import cli
 from belegdock.desktop import DesktopApplication, DesktopService
 from belegdock.workflow import Store
+from async_dispatch_test_helper import ManualOperationDispatcher
 
 
 def classification_module():
@@ -137,11 +138,17 @@ class ScanClassifierReviewTests(unittest.TestCase):
             app.label = Mock()
             app.label.get.return_value = "Invoices"
             app.notice = Mock()
+            dispatcher = ManualOperationDispatcher()
+            app._dispatch_operation = dispatcher
 
             try:
                 app._load_candidates()
             except Exception as error:
                 self.fail(f"optional classification escaped the safe UI boundary: {type(error).__name__}")
+
+            self.assertEqual(app.candidates_view.rows, [])
+            self.assertEqual(dispatcher.pending_count, 1)
+            dispatcher.complete_next()
 
             self.assertEqual(
                 app.candidates_view.rows,

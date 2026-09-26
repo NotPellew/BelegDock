@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock
 
 from belegdock.desktop import DesktopApplication
+from async_dispatch_test_helper import ManualOperationDispatcher
 
 
 class Variable:
@@ -36,8 +37,16 @@ class DesktopLabelSelectionTests(unittest.TestCase):
         app.label = Variable()
         app.label_box = LabelBox()
         app._load_candidates = Mock()
+        dispatcher = ManualOperationDispatcher()
+        app._dispatch_operation = dispatcher
 
         app._load_labels()
+
+        self.assertEqual(app.label_box.values, ())
+        self.assertEqual(app.label_box.selected_index, None)
+        self.assertEqual(app.label.get(), "")
+        self.assertEqual(dispatcher.pending_count, 1)
+        dispatcher.complete_next()
 
         self.assertEqual(app.label_box.values, ("Invoices", "Receipts"))
         self.assertEqual(app.label_box.selected_index, 0)
