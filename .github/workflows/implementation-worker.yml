@@ -115,7 +115,17 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
           opencode run --standalone --agent implementation-plan-reviewer --model opencode/space-bunny-free --title "Review plan for BelegDock issue #$ISSUE_NUMBER" --file .implementation-plan.md "Review the plan against .implementation-issue.md and repository instructions. Return the required plan review verdict and actionable findings." > "$IMPLEMENTATION_EVIDENCE/plan-review.md"
-          grep -Fxq -- '**Plan review verdict: PASS**' "$IMPLEMENTATION_EVIDENCE/plan-review.md" || { echo 'The plan review found a blocker or did not return PASS.' >&2; exit 1; }
+          if grep -Fxq -- '**Plan review verdict: PASS**' "$IMPLEMENTATION_EVIDENCE/plan-review.md"; then
+            if grep -Fxq -- '**Plan review verdict: NEEDS-REVISION**' "$IMPLEMENTATION_EVIDENCE/plan-review.md"; then
+              echo 'The plan review returned conflicting verdicts.' >&2
+              exit 1
+            fi
+          elif grep -Fxq -- '**Plan review verdict: NEEDS-REVISION**' "$IMPLEMENTATION_EVIDENCE/plan-review.md"; then
+            echo 'The plan review requested changes; passing its findings to plan finalization.'
+          else
+            echo 'OpenCode did not return a valid plan review verdict.' >&2
+            exit 1
+          fi
           git diff --quiet || { echo 'Plan review changed tracked files; refusing to continue.' >&2; exit 1; }
           test "$(git ls-files --others --exclude-standard | sort | tr '\n' ' ')" = '.implementation-issue.md .implementation-plan.md ' || { echo 'Plan review changed an unapproved path.' >&2; exit 1; }
 
