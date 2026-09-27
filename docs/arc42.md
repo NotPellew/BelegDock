@@ -174,6 +174,7 @@ and host sockets are not. The session gets a temporary home and /tmp.
 | GitHub issues and PRs | One feature specification and linked delivery evidence | Hosting requirements change |
 | Protected tests and RED/GREEN records | Prevent silent test changes; requires host enforcement and CI | Verification exposes a gap |
 | Bubblewrap for the initial Linux boundary | Small launcher using OS mounts; no new service | Windows implementation or runtime compatibility requires another backend |
+| Issue and implementation plan | The issue body records user-facing scope and acceptance; a linked repository-local plan records technical implementation details | The planning or handoff workflow no longer preserves this separation |
 | PyInstaller onedir plus per-user Inno Setup for the Windows pilot | Installs without admin or a source checkout; install path stays independent from user data | Runner/toolchain drift or a signing requirement appears |
 
 ## 10. Quality requirements
