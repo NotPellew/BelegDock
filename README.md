@@ -3,6 +3,18 @@
 Eine lokale CLI zur ausdrücklichen Auswahl von Gmail-Anhängen und zur Übertragung
 von Dokumenten an Lexware Office, ohne das Postfach zu verändern.
 
+## Feature-Änderungen
+
+Der GitHub-Issue-Text ist die dauerhafte, nutzerseitige Spezifikation: gewünschte
+Funktion, Anlass, bestätigte Produktentscheidungen, Umfang und überprüfbare
+Akzeptanzkriterien. Technische Umsetzungsschritte stehen in einem lokalen
+Repository-Plan wie `docs/issue-N-implementation-plan.md`, der im Issue verlinkt
+wird; sie gehören nicht als technische Spezifikation in den Issue-Text. Vor
+Planung oder Umsetzung erhält der zuständige Agent eine fokussierte, geprüfte
+Übergabe mit Issue und Plan, bestätigten Randbedingungen und offenen Fragen.
+Sprachnachrichten werden dafür zusammengefasst und geprüft; beliebige
+Sprachchat-Nachrichten oder nur die letzte Äußerung sind keine Übergabe.
+
 ## Status
 
 Früher Machbarkeitsstand, keine Produktionsfreigabe. Offline-Tests decken Auswahl,

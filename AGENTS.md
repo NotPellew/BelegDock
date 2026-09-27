@@ -16,8 +16,19 @@
 
 ## Feature workflow
 
-The GitHub issue is the feature specification; the linked PR holds implementation
-evidence. Do not maintain duplicate feature specifications in docs/.
+The GitHub issue body is the durable user-facing feature specification: wanted
+functionality, why it is wanted, confirmed product decisions, scope, and
+observable acceptance criteria. Keep technical implementation details in a
+repository-local plan such as `docs/issue-N-implementation-plan.md`, linked from
+the issue; do not copy them into the issue body as a technical specification.
+The linked PR holds implementation evidence. Do not maintain duplicate feature
+specifications in docs/.
+
+Before planning or implementation, prepare a focused, reviewed handoff that
+points to the issue and local plan and states confirmed constraints and
+unresolved questions. Pass that handoff to the agent doing the work. Do not
+forward arbitrary voice-chat messages or rely only on the last utterance; first
+distill the relevant intent into the reviewed handoff.
 
 1. Refine the request: outcome, scope, exclusions, observable acceptance criteria,
    failure behavior, and decisions needed before coding.
