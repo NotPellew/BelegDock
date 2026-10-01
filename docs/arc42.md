@@ -68,7 +68,8 @@ These are module responsibilities, not separate services or a plugin system.
 ## 6. Runtime view
 
 1. Discover and annotate every attachment candidate in the selected label without
-   changing mail.
+   changing mail. If no candidates exist, explain this on stderr while keeping the
+   stdout JSON array empty.
 2. Stage selected bytes durably and compute their SHA-256 hashes.
 3. Record document identity and every source occurrence.
 4. Refresh the organization-bound remote inventory before upload; verify an
@@ -242,7 +243,8 @@ and host sockets are not. The session gets a temporary home and /tmp.
   A missing or empty database in a nonempty data directory is treated as an
   incomplete restore and is not recreated. Local document listing checks bounded
   blob bytes and reports missing, corrupt, or unreadable blobs without changing
-  transfer status or remote identifiers. An already uploaded document is not
+  transfer status or remote identifiers, naming affected documents and damage types
+  on stderr before restore guidance. An already uploaded document is not
   reported as successfully reusable when its local blob fails that check.
   Windows flushes file bytes, while POSIX also flushes the containing directory.
   Power-loss durability and backup restoration need separate validation.
