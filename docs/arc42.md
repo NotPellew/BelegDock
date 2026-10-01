@@ -77,6 +77,16 @@ These are module responsibilities, not separate services or a plugin system.
 6. Record documented HTTP 400/406 rejections separately from uncertain remote outcomes.
 7. Reconcile an uncertain result only through explicit remote file and voucher reads.
 
+Desktop operations run off the Tk event loop through one daemon worker thread and a
+queue drained by a `root.after` pump, so widgets are only touched on the event loop.
+Cancellation is cooperative and checked only at the two pre-POST upload boundaries
+(after the lock/row read and after the inventory refresh/verify, before any state
+mutation) and before each staging fetch; an in-flight request finishes and its
+result is discarded. After the durable `uploading` marker the POST runs
+uncancellable. A rejected upload is terminal for the current bytes; an uncertain
+outcome keeps `uploading`/`uncertain` and is only resolved through the CLI
+recovery commands.
+
 The upload spike must establish recovery after an ambiguous result before
 automatic retries are introduced. A local transaction cannot include an HTTP
 upload or ordinary file write; recovery across these boundaries needs tests.
@@ -100,8 +110,13 @@ and pins `pyinstaller` in `packaging/build_windows.py` so `pyproject.toml` and
 `uv.lock` stay untouched. CI retains the installer folder (setup executable,
 `artifact.json` with sha256, size, wheel hash, resolved dependency versions, tool
 versions and git revision, plus the frozen bundle) as a 90-day workflow artifact;
-there is no GitHub Release and no code signing. The real window launch stays a
-manual native Windows check.
+there is no GitHub Release and no code signing. The installer smoke step launches
+the frozen desktop executable with `BELEGDOCK_DESKTOP_SMOKE=1`: the hook skips
+credential loading, wires deterministic fake Gmail/Lexware services over a temporary
+`Store`, drives a scripted self-test, appends JSON state lines to a dump, and the
+step asserts the visible-state sequence, a clean exit, and remaining staged bytes.
+Without the environment variable the production path is unchanged. A credentialed
+live window launch stays a manual native Windows check.
 
 The Windows pilot also has repository-local test tooling for synthetic fixtures.
 `generate_pilot_fixtures.py` writes a manifest and sample PDF/XML documents
@@ -148,6 +163,11 @@ and host sockets are not. The session gets a temporary home and /tmp.
 - Staging survives interruptions until an upload can be resolved. Optional
   retention of original attachments follows reliable staging/upload. No automatic
   deletion policy is agreed. Defer original-email (.eml) retention and search.
+- Desktop failures map to typed exceptions: `OperationCancelled` (safe-boundary
+  cancellation with staged/total counts), `UploadOutcomeUncertain` (transport or
+  already-ambiguous outcome), `RemoteAuthError` (HTTP 401/403), plus the existing
+  `DocumentRejected`, `LocalIntegrityError`, and `TransferActiveError`. The desktop
+  view turns them into fixed German guidance without logging document contents.
 - Use the OS credential store and fail explicitly when unavailable. No silent
   plaintext fallback. Keep credentials, message bodies, and document contents out
   of logs and test fixtures.

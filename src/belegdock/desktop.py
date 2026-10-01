@@ -1,15 +1,28 @@
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 import gettext
+import json
+import os
 from pathlib import Path
 from pathlib import PurePath
+import queue
 import sys
+import threading
 from threading import Lock
 from typing import Any
 
+import httpx
+
 from .classification import CandidateClassification, lookup_candidate_classification
 from .service import refresh_remote_inventory
-from .workflow import DocumentRejected, Store
+from .workflow import (
+    DocumentRejected,
+    LocalIntegrityError,
+    OperationCancelled,
+    Store,
+    TransferActiveError,
+    UploadOutcomeUncertain,
+)
 
 
 _ = gettext.gettext
@@ -25,6 +38,61 @@ LOCAL_RESTORE_GUIDANCE = _(
     "Die Integrität lokaler Dokumente ist fehlgeschlagen; stelle state.sqlite3 und blobs "
     "aus einer konsistenten Sicherung wieder her."
 )
+LOCAL_STORAGE_GUIDANCE = _(
+    "Lokaler Speicher ist nicht verfügbar; stelle state.sqlite3 und blobs aus einer "
+    "konsistenten Sicherung wieder her. Siehe README.md."
+)
+REJECTED_GUIDANCE = _(
+    "Lexware hat das Dokument abgelehnt; korrigiere das Dokument und bereite die "
+    "neuen Bytes vor."
+)
+LABELS_LOADING_TEXT = _("Gmail-Labels werden geladen…")
+CANDIDATES_LOADING_TEXT = _("Anhänge werden geladen…")
+STAGING_START_TEXT = _("Ausgewählte Dateien werden vorbereiten…")
+STAGING_PROGRESS_TEMPLATE = _("Vorbereiten %(done)d von %(total)d…")
+DOCUMENTS_LOADING_TEXT = _("Dokumente werden aktualisiert…")
+UPLOAD_PRECHECK_TEXT = _("Lexware-Inventar wird geprüft…")
+UNCANCELLABLE_UPLOAD_TEXT = _(
+    "Senden läuft; Abbruch ist nicht möglich. Bei unklarem Ergebnis ist die "
+    "CLI-Wiederherstellung erforderlich."
+)
+CANCEL_REQUESTED_TEXT = _("Abbruch wird angefordert…")
+CLOSE_CANCELLABLE_TEXT = _(
+    "Abbruch wird angefordert; die Oberfläche wird nach dem nächsten sicheren Punkt "
+    "geschlossen."
+)
+CLOSE_UNCANCELLABLE_TEXT = _("Senden läuft; die Oberfläche wird nach dem Ergebnis geschlossen.")
+CANCELLED_TEXT = _("Vorgang abgebrochen.")
+CANCELLED_STAGING_TEXT = _(
+    "Vorbereiten abgebrochen; %(done)d von %(total)d Dateien lokal gespeichert; "
+    "nichts wurde an Lexware gesendet."
+)
+CANCELLED_UPLOAD_TEXT = _(
+    "Senden abgebrochen; das Dokument bleibt lokal vorbereitet und wurde nicht gesendet."
+)
+GMAIL_GUIDANCE = _("Gmail-Daten konnten nicht geladen werden; prüfe die Kontoverbindung und das Label.")
+AUTH_GUIDANCE = _(
+    "Anmeldung fehlgeschlagen oder abgelaufen; melde das Konto mit „login-gmail“ bzw. "
+    "„login-lexware“ erneut an."
+)
+CONNECTIVITY_GUIDANCE = _(
+    "Verbindung fehlgeschlagen; prüfe die Internetverbindung und versuche es erneut."
+)
+TRANSFER_ACTIVE_GUIDANCE = _(
+    "Ein anderer Vorgang ist aktiv für %(hash)s; warte, bis er beendet ist. "
+    "Nicht erneut senden."
+)
+UNCERTAIN_GUIDANCE = _(
+    "Sendeergebnis für %(hash)s unklar; nicht erneut senden. Verwende die CLI-Befehle "
+    "zur Wiederherstellung und Abstimmung. Siehe README.md."
+)
+LEXWARE_UNREACHABLE_GUIDANCE = _(
+    "Lexware ist nicht erreichbar; prüfe die Internetverbindung und versuche es erneut."
+)
+GENERIC_GUIDANCE = _(
+    "Vorgang fehlgeschlagen; prüfe Kontoverbindung und lokalen Speicher. Siehe README.md."
+)
+DESKTOP_SMOKE_ENV = "BELEGDOCK_DESKTOP_SMOKE"
 
 
 def format_size(value: Any) -> str:
@@ -104,29 +172,52 @@ class DesktopService:
     def candidate_classification(self, candidate: dict[str, Any]) -> CandidateClassification:
         return lookup_candidate_classification(self.gmail, candidate)
 
-    def stage(self, label: str, selected_ids: Sequence[str]) -> list[str]:
+    def stage(
+        self,
+        label: str,
+        selected_ids: Sequence[str],
+        *,
+        progress: Callable[[tuple[str, int, int]], None] | None = None,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> list[str]:
         with self._operation():
-            candidates = self.gmail.candidates(label)
+            if cancelled is None:
+                candidates = self.gmail.candidates(label)
+            else:
+                candidates = self.gmail.candidates(label, cancelled=cancelled)
             selected = set(selected_ids)
             known = {candidate["id"] for candidate in candidates}
             if not selected or not selected.issubset(known):
                 raise ValueError("Wähle mindestens ein angezeigtes Dokument aus")
-            return [
-                self.store.stage(
-                    self.account,
-                    candidate["message_id"],
-                    candidate["part_id"],
-                    candidate["filename"],
-                    self.gmail.fetch(candidate),
+            chosen = [candidate for candidate in candidates if candidate["id"] in selected]
+            total = len(chosen)
+            digests: list[str] = []
+            for index, candidate in enumerate(chosen):
+                if cancelled is not None and cancelled():
+                    raise OperationCancelled(index, total)
+                digests.append(
+                    self.store.stage(
+                        self.account,
+                        candidate["message_id"],
+                        candidate["part_id"],
+                        candidate["filename"],
+                        self.gmail.fetch(candidate),
+                    )
                 )
-                for candidate in candidates
-                if candidate["id"] in selected
-            ]
+                if progress is not None:
+                    progress(("progress", index + 1, total))
+            return digests
 
     def documents(self) -> list[dict[str, Any]]:
         return self.store.list_documents()
 
-    def upload(self, digest: str) -> dict[str, str]:
+    def upload(
+        self,
+        digest: str,
+        *,
+        cancelled: Callable[[], bool] | None = None,
+        phase: Callable[[str], None] | None = None,
+    ) -> dict[str, str]:
         with self._operation():
             verify = getattr(self.remote, "verify_existing", None)
             return self.store.upload(
@@ -134,6 +225,8 @@ class DesktopService:
                 self.remote.upload,
                 lambda: refresh_remote_inventory(self.store, self.remote),
                 verify=verify if callable(verify) else None,
+                cancelled=cancelled,
+                phase=phase,
             )
 
     def close(self) -> None:
@@ -152,22 +245,97 @@ class DesktopService:
             self._flight.release()
 
 
-def _safe_error(operation: str, error: Exception) -> str:
-    del error
-    return {
-        "labels": _("Gmail-Labels konnten nicht geladen werden; prüfe die Kontoverbindung."),
-        "candidates": _("Anhänge konnten nicht geladen werden; prüfe Label und Kontoverbindung."),
-        "stage": _("Vorbereiten fehlgeschlagen; prüfe Auswahl, Verbindung und lokalen Speicher."),
-        "documents": _("Dokumente konnten nicht geladen werden; prüfe den lokalen Speicher."),
-        "upload": _(
-            "Senden fehlgeschlagen; prüfe Dokumente. Bei unklarem Ergebnis ist die "
-            "CLI-Wiederherstellung erforderlich."
-        ),
-        "rejected": _(
-            "Lexware hat das Dokument abgelehnt; korrigiere das Dokument und bereite die "
-            "neuen Bytes vor."
-        ),
-    }.get(operation, _("Vorgang fehlgeschlagen; prüfe Kontoverbindung und lokalen Speicher."))
+def failure_guidance(operation: str, error: Exception, digest: str | None = None) -> str:
+    if isinstance(error, DocumentRejected):
+        return REJECTED_GUIDANCE
+    if isinstance(error, OperationCancelled):
+        if operation == "stage":
+            return CANCELLED_STAGING_TEXT % {
+                "done": error.completed,
+                "total": error.total,
+            }
+        if operation == "upload":
+            return CANCELLED_UPLOAD_TEXT
+        return CANCELLED_TEXT
+    if isinstance(error, LocalIntegrityError):
+        return LOCAL_STORAGE_GUIDANCE
+    if isinstance(error, UploadOutcomeUncertain):
+        return UNCERTAIN_GUIDANCE % {"hash": digest or ""}
+    if isinstance(error, TransferActiveError):
+        return TRANSFER_ACTIVE_GUIDANCE % {"hash": digest or ""}
+    if getattr(error, "status_code", None) in (401, 403):
+        return AUTH_GUIDANCE
+    if isinstance(error, (OSError, httpx.HTTPError)):
+        return CONNECTIVITY_GUIDANCE
+    if operation in {"labels", "candidates", "stage"}:
+        return GMAIL_GUIDANCE
+    if operation == "upload":
+        return LEXWARE_UNREACHABLE_GUIDANCE
+    if operation == "documents":
+        return LOCAL_STORAGE_GUIDANCE
+    return GENERIC_GUIDANCE
+
+
+def _run_operation_synchronously(
+    operation: Callable[[], Any], completed: Callable[[Any, Exception | None], None]
+) -> None:
+    try:
+        result = operation()
+    except Exception as error:
+        completed(None, error)
+    else:
+        completed(result, None)
+
+
+class _TkWorkerDispatcher:
+    def __init__(self, root: Any, event_handler: Callable[[Any], None], interval_ms: int = 20):
+        self.root = root
+        self.event_handler = event_handler
+        self.interval_ms = interval_ms
+        self._queue: queue.Queue[tuple[Any, Any, Exception | None]] = queue.Queue()
+        self._closed = False
+        self._schedule()
+
+    def __call__(self, operation: Callable[[], Any], completed: Callable[[Any, Exception | None], None]) -> None:
+        def run() -> None:
+            try:
+                result = operation()
+            except Exception as error:
+                self._queue.put((completed, None, error))
+            else:
+                self._queue.put((completed, result, None))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def report(self, event: Any) -> None:
+        self._queue.put((None, event, None))
+
+    def close(self) -> None:
+        self._closed = True
+
+    def _schedule(self) -> None:
+        if self._closed:
+            return
+        try:
+            self.root.after(self.interval_ms, self._pump)
+        except Exception:
+            self._closed = True
+
+    def _pump(self) -> None:
+        while True:
+            try:
+                completed, payload, error = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                if completed is None:
+                    self.event_handler(payload)
+                else:
+                    completed(payload, error)
+            except Exception as problem:
+                print(f"BelegDock desktop operation error: {problem}", file=sys.stderr)
+        self._schedule()
+
 
 
 def document_action_state(
@@ -180,7 +348,7 @@ def document_action_state(
     if status_code == "uploaded":
         return False, status_label(status_code), _("Dieses Dokument wurde bereits an Lexware gesendet.")
     if status_code == "rejected":
-        return False, status_label(status_code), _safe_error("rejected", RuntimeError())
+        return False, status_label(status_code), REJECTED_GUIDANCE
     if status_code in {"uncertain", "uploading"}:
         return False, status_label(status_code), _(
             "Ergebnis unklar; verwende die CLI-Befehle zur Wiederherstellung und Abstimmung."
@@ -197,6 +365,14 @@ def _safe_filename(value: Any) -> str:
 
 
 class DesktopApplication:
+    _operation_active = False
+    _uncancellable = False
+    _closed = False
+    _close_after_completion = False
+    _cancel_event: threading.Event | None = None
+    _operation_progress_template: str | None = None
+    _smoke_dump: Path | None = None
+
     def __init__(self, service: DesktopService, tk: Any, ttk: Any, messagebox: Any):
         self.service = service
         self.tk = tk
@@ -210,9 +386,201 @@ class DesktopApplication:
         self._document_hashes: dict[str, str] = {}
         self._document_status: dict[str, str] = {}
         self._document_details: dict[str, dict[str, str]] = {}
+        self._cancel_event = threading.Event()
+        self._operation_dispatcher = _TkWorkerDispatcher(self.root, self._handle_operation_event)
+        self.root.protocol("WM_DELETE_WINDOW", self._request_close)
         self._build()
         self._load_labels()
-        self._load_documents()
+        self._reload_documents()
+
+    def _dispatch_operation(
+        self, operation: Callable[[], Any], completed: Callable[[Any, Exception | None], None]
+    ) -> None:
+        dispatcher: Any = getattr(self, "_operation_dispatcher", None)
+        if dispatcher is None:
+            _run_operation_synchronously(operation, completed)
+            return
+        dispatcher(operation, completed)
+
+    def _report_event(self, event: Any) -> None:
+        if isinstance(event, str):
+            event = ("phase", event)
+        for candidate in (
+            getattr(self, "_dispatch_operation", None),
+            getattr(self, "_operation_dispatcher", None),
+        ):
+            report = getattr(candidate, "report", None)
+            if callable(report):
+                report(event)
+                return
+
+    def _record_state(self, state: str, **fields: Any) -> None:
+        dump = getattr(self, "_smoke_dump", None)
+        if dump is None:
+            return
+        record = {"state": state, **fields}
+        try:
+            with open(dump, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, sort_keys=True) + "\n")
+        except OSError:
+            pass
+
+    def _is_cancelled(self) -> bool:
+        event = getattr(self, "_cancel_event", None)
+        return bool(event is not None and event.is_set())
+
+    def _set_text(self, variable: Any, value: str) -> None:
+        setter = getattr(variable, "set", None)
+        if callable(setter):
+            setter(value)
+
+    def _set_notice(self, text: str) -> None:
+        self._set_text(getattr(self, "notice", None), text)
+
+    def _set_enabled(self, widget: Any, enabled: bool, extra: tuple[str, ...] = ()) -> None:
+        if widget is None:
+            return
+        state = getattr(widget, "state", None)
+        if callable(state):
+            state(["!disabled", *extra] if enabled else ["disabled"])
+            return
+        configure = getattr(widget, "configure", None)
+        if callable(configure):
+            configure(state="normal" if enabled else "disabled")
+
+    def _set_combobox_enabled(self, enabled: bool) -> None:
+        self._set_enabled(getattr(self, "label_box", None), enabled, ("readonly",))
+
+    def _set_cancel_enabled(self, enabled: bool) -> None:
+        self._set_enabled(getattr(self, "cancel_button", None), enabled)
+
+    def _set_progress_indeterminate(self) -> None:
+        bar = getattr(self, "progress", None)
+        configure = getattr(bar, "configure", None)
+        if callable(configure):
+            configure(mode="indeterminate", value=0)
+        start = getattr(bar, "start", None)
+        if callable(start):
+            start(20)
+
+    def _set_progress_determinate(self, done: int, total: int) -> None:
+        bar = getattr(self, "progress", None)
+        stop = getattr(bar, "stop", None)
+        if callable(stop):
+            stop()
+        configure = getattr(bar, "configure", None)
+        if callable(configure):
+            configure(mode="determinate", maximum=max(total, 1), value=done)
+
+    def _set_progress_idle(self) -> None:
+        bar = getattr(self, "progress", None)
+        stop = getattr(bar, "stop", None)
+        if callable(stop):
+            stop()
+        configure = getattr(bar, "configure", None)
+        if callable(configure):
+            configure(mode="determinate", maximum=1, value=0)
+
+    def _restore_upload_button(self) -> None:
+        row = getattr(self, "_detail_row", None)
+        actions: dict[str, tuple[bool, str, str]] = getattr(self, "_document_action", {}) or {}
+        action = actions.get(row) if row is not None else None
+        self._set_enabled(getattr(self, "upload_button", None), bool(action and action[0]))
+
+    def _begin_operation(self, text: str, template: str | None = None) -> None:
+        self._operation_active = True
+        self._uncancellable = False
+        self._operation_progress_template = template
+        event = getattr(self, "_cancel_event", None)
+        if event is not None:
+            event.clear()
+        self._set_text(getattr(self, "operation_status", None), text)
+        self._set_progress_indeterminate()
+        self._set_cancel_enabled(True)
+        self._set_enabled(getattr(self, "stage_button", None), False)
+        self._set_enabled(getattr(self, "upload_button", None), False)
+        self._set_combobox_enabled(False)
+        self._record_state("operation", text=text)
+
+    def _end_operation(self) -> None:
+        self._operation_active = False
+        self._uncancellable = False
+        self._operation_progress_template = None
+        event = getattr(self, "_cancel_event", None)
+        if event is not None:
+            event.clear()
+        self._set_text(getattr(self, "operation_status", None), "")
+        self._set_progress_idle()
+        self._set_cancel_enabled(False)
+        self._set_enabled(getattr(self, "stage_button", None), True)
+        self._set_combobox_enabled(True)
+        self._restore_upload_button()
+        self._record_state("idle")
+
+    def _handle_operation_event(self, event: Any) -> None:
+        if getattr(self, "_closed", False):
+            return
+        if isinstance(event, tuple) and len(event) == 3 and event[0] == "progress":
+            _, done, total = event
+            self._set_progress_determinate(done, total)
+            template = getattr(self, "_operation_progress_template", None)
+            text = template % {"done": done, "total": total} if template else ""
+            self._set_text(getattr(self, "operation_status", None), text)
+            self._record_state("progress", text=text)
+            return
+        if event == ("phase", "uploading"):
+            self._uncancellable = True
+            self._set_cancel_enabled(False)
+            self._set_text(getattr(self, "operation_status", None), UNCANCELLABLE_UPLOAD_TEXT)
+            self._record_state("uncancellable")
+
+    def _cancel_operation(self) -> None:
+        if not getattr(self, "_operation_active", False) or getattr(self, "_uncancellable", False):
+            return
+        event = getattr(self, "_cancel_event", None)
+        if event is not None:
+            event.set()
+        self._set_cancel_enabled(False)
+        self._set_notice(CANCEL_REQUESTED_TEXT)
+        self._record_state("cancel_requested")
+
+    def _request_close(self) -> None:
+        if getattr(self, "_closed", False):
+            return
+        if getattr(self, "_operation_active", False):
+            self._close_after_completion = True
+            if getattr(self, "_uncancellable", False):
+                self._set_notice(CLOSE_UNCANCELLABLE_TEXT)
+                return
+            event = getattr(self, "_cancel_event", None)
+            if event is not None:
+                event.set()
+            self._set_notice(CLOSE_CANCELLABLE_TEXT)
+            self._record_state("closing")
+            self._close()
+            return
+        self._record_state("closing")
+        self._close()
+
+    def _close(self) -> None:
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
+        dispatcher: Any = getattr(self, "_operation_dispatcher", None)
+        close = getattr(dispatcher, "close", None)
+        if callable(close):
+            close()
+        root = getattr(self, "root", None)
+        destroy = getattr(root, "destroy", None)
+        if callable(destroy):
+            try:
+                destroy()
+            except Exception:
+                pass
+
+    def _maybe_close_after_completion(self) -> None:
+        if getattr(self, "_close_after_completion", False):
+            self._close()
 
     def _build(self) -> None:
         self._configure_window()
@@ -344,6 +712,21 @@ class DesktopApplication:
             row=2, column=0, columnspan=2, sticky="w", pady=(6, 0)
         )
         self.review_section.columnconfigure(0, weight=1)
+
+        status_strip = self.ttk.Frame(frame, style="Main.TFrame")
+        status_strip.grid(row=2, column=0, sticky="ew", pady=(12, 0))
+        self.operation_status = self.tk.StringVar()
+        self.progress = self.ttk.Progressbar(status_strip, mode="indeterminate", length=220)
+        self.progress.grid(row=0, column=0, sticky="w")
+        self.ttk.Label(
+            status_strip, textvariable=self.operation_status, style="Helper.TLabel", wraplength=700
+        ).grid(row=0, column=1, sticky="w", padx=(12, 0))
+        self.cancel_button = self.ttk.Button(
+            status_strip, text=_("Abbrechen"), command=self._cancel_operation
+        )
+        self.cancel_button.grid(row=0, column=2, sticky="e", padx=(12, 0))
+        status_strip.columnconfigure(1, weight=1)
+        self._set_cancel_enabled(False)
 
         self._section_layout: str | None = None
         self.root.bind("<Configure>", self._layout_sections)
@@ -518,11 +901,23 @@ class DesktopApplication:
         self.root.mainloop()
 
     def _load_labels(self) -> None:
-        try:
-            labels = self.service.labels()
-        except Exception as error:
-            self.notice.set(_safe_error("labels", error))
+        if getattr(self, "_operation_active", False):
             return
+        self._begin_operation(LABELS_LOADING_TEXT)
+        self._dispatch_operation(lambda: self.service.labels(), self._labels_completed)
+
+    def _labels_completed(self, result: Any, error: Exception | None) -> None:
+        if getattr(self, "_closed", False):
+            return
+        cancelled = self._is_cancelled()
+        self._end_operation()
+        if error is not None:
+            self._set_notice(failure_guidance("labels", error))
+            return
+        if cancelled:
+            self._set_notice(CANCELLED_TEXT)
+            return
+        labels = list(result or [])
         self.label_box["values"] = tuple(labels)
         if labels:
             self.label.set(labels[0])
@@ -530,20 +925,34 @@ class DesktopApplication:
             self._load_candidates()
 
     def _label_changed(self, _event: Any = None) -> None:
+        if getattr(self, "_operation_active", False):
+            return
         self._load_candidates()
 
     def _load_candidates(self) -> None:
+        if getattr(self, "_operation_active", False):
+            return
         for row in self.candidates_view.get_children():
             self.candidates_view.delete(row)
-        self._candidate_ids.clear()
-        if not self.label.get():
+        candidate_ids = getattr(self, "_candidate_ids", None)
+        if candidate_ids is not None:
+            candidate_ids.clear()
+        label = self.label.get() if getattr(self, "label", None) is not None else ""
+        if not label:
             return
-        try:
-            candidates = self.service.candidates(self.label.get())
-        except Exception as error:
-            self.notice.set(_safe_error("candidates", error))
+        self._begin_operation(CANDIDATES_LOADING_TEXT)
+        self._dispatch_operation(
+            lambda: self.service.candidates(label), self._candidates_completed
+        )
+
+    def _candidates_completed(self, result: Any, error: Exception | None) -> None:
+        if getattr(self, "_closed", False):
             return
-        for candidate in candidates:
+        self._end_operation()
+        if error is not None:
+            self._set_notice(failure_guidance("candidates", error))
+            return
+        for candidate in result or []:
             classification = self.service.candidate_classification(candidate)
             row = self.candidates_view.insert(
                 "",
@@ -556,7 +965,7 @@ class DesktopApplication:
                 ),
             )
             self._candidate_ids[row] = candidate["id"]
-        self.notice.set(
+        self._set_notice(
             _(
                 "Wähle mindestens einen Anhang aus und klicke dann auf „Ausgewählte "
                 "Dokumente vorbereiten“."
@@ -564,17 +973,56 @@ class DesktopApplication:
         )
 
     def _stage(self) -> None:
+        if getattr(self, "_operation_active", False):
+            return
         selected_rows = self.candidates_view.selection()
         selected_ids = [self._candidate_ids[row] for row in selected_rows]
-        try:
-            self.service.stage(self.label.get(), selected_ids)
-        except Exception as error:
-            self.notice.set(_safe_error("stage", error))
-            return
-        self.notice.set(_("Ausgewählte Dateien wurden lokal gespeichert; nichts wurde an Lexware gesendet."))
-        self._load_documents()
+        label = self.label.get()
+        self._begin_operation(STAGING_START_TEXT, template=STAGING_PROGRESS_TEMPLATE)
+        self._dispatch_operation(
+            lambda: self.service.stage(
+                label,
+                selected_ids,
+                progress=self._report_event,
+                cancelled=self._is_cancelled,
+            ),
+            self._stage_completed,
+        )
 
-    def _load_documents(self) -> None:
+    def _stage_completed(self, result: Any, error: Exception | None) -> None:
+        if getattr(self, "_closed", False):
+            return
+        self._end_operation()
+        if error is not None:
+            self._set_notice(failure_guidance("stage", error))
+        else:
+            self._set_notice(
+                _("Ausgewählte Dateien wurden lokal gespeichert; nichts wurde an Lexware gesendet.")
+            )
+        self._reload_documents()
+
+    def _reload_documents(self) -> None:
+        if getattr(self, "_closed", False):
+            return
+        if getattr(self, "_operation_active", False):
+            root = getattr(self, "root", None)
+            after = getattr(root, "after", None)
+            if callable(after):
+                after(50, self._reload_documents)
+            return
+        self._begin_operation(DOCUMENTS_LOADING_TEXT)
+        self._dispatch_operation(lambda: self.service.documents(), self._documents_loaded)
+
+    def _documents_loaded(self, result: Any, error: Exception | None) -> None:
+        if getattr(self, "_closed", False):
+            return
+        self._end_operation()
+        if error is not None:
+            self._set_notice(failure_guidance("documents", error))
+            return
+        self._load_documents(result)
+
+    def _load_documents(self, result: Any = None) -> None:
         for row in self.documents_view.get_children():
             self.documents_view.delete(row)
         self._document_hashes.clear()
@@ -596,11 +1044,14 @@ class DesktopApplication:
         if detail_voucher_id is not None:
             detail_voucher_id.set("")
         self._set_action_region(None)
-        try:
-            documents = self.service.documents()
-        except Exception as error:
-            self.notice.set(_safe_error("documents", error))
-            return
+        if result is None:
+            try:
+                documents = self.service.documents()
+            except Exception as error:
+                self._set_notice(failure_guidance("documents", error))
+                return
+        else:
+            documents = result
         restore_required = False
         for document in documents:
             integrity = document.get("localIntegrity")
@@ -633,7 +1084,8 @@ class DesktopApplication:
             )
             self._document_integrity[row] = integrity
         if restore_required:
-            self.notice.set(LOCAL_RESTORE_GUIDANCE)
+            self._set_notice(LOCAL_RESTORE_GUIDANCE)
+        self._record_state("documents", count=len(documents))
 
     def _show_document_detail(self, _event: Any = None) -> None:
         rows = self.documents_view.selection()
@@ -700,23 +1152,25 @@ class DesktopApplication:
         return reverse.get(displayed, displayed)
 
     def _upload(self) -> None:
+        if getattr(self, "_operation_active", False):
+            return
         rows = self.documents_view.selection()
         if len(rows) != 1:
-            self.notice.set(_("Wähle genau ein vorbereitetes Dokument zum Senden aus."))
+            self._set_notice(_("Wähle genau ein vorbereitetes Dokument zum Senden aus."))
             return
         row = rows[0]
         values = self.documents_view.item(row, "values")
         if getattr(self, "_document_integrity", {}).get(row, "ok") != "ok":
-            self.notice.set(LOCAL_RESTORE_GUIDANCE)
+            self._set_notice(LOCAL_RESTORE_GUIDANCE)
             return
         status = self._status_code_for_row(row, values)
         if status in {"uncertain", "uploading"}:
-            self.notice.set(
+            self._set_notice(
                 _("Ergebnis unklar; verwende die CLI-Befehle zur Wiederherstellung und Abstimmung.")
             )
             return
         if status != "staged":
-            self.notice.set(_("Nur vorbereitete Dokumente können gesendet werden."))
+            self._set_notice(_("Nur vorbereitete Dokumente können gesendet werden."))
             return
         filename = _safe_filename(values[0])
         size = format_size(values[1]) if isinstance(values[1], int) else str(values[1])
@@ -726,28 +1180,39 @@ class DesktopApplication:
             % {"filename": filename, "size": size},
         ):
             return
-        try:
-            result = self.service.upload(self._document_hashes[row])
-        except DocumentRejected as error:
-            self.notice.set(_safe_error("rejected", error))
-            self._load_documents()
+        digest = self._document_hashes[row]
+        self._begin_operation(UPLOAD_PRECHECK_TEXT)
+        self._dispatch_operation(
+            lambda: self.service.upload(
+                digest, cancelled=self._is_cancelled, phase=self._report_event
+            ),
+            lambda result, error: self._upload_completed(result, error, digest),
+        )
+
+    def _upload_completed(
+        self, result: Any, error: Exception | None, digest: str
+    ) -> None:
+        if getattr(self, "_closed", False):
             return
-        except Exception as error:
-            self.notice.set(_safe_error("upload", error))
-            self._load_documents()
+        self._end_operation()
+        if error is not None:
+            self._set_notice(failure_guidance("upload", error, digest))
+            self._reload_documents()
+            self._maybe_close_after_completion()
             return
         if result.get("status") == "already_present":
-            self.notice.set(
+            self._set_notice(
                 _("Bereits in Lexware vorhanden; es wurde nichts gesendet. Lexware-Datei %(file_id)s "
                   "und Beleg %(voucher_id)s.")
                 % {"file_id": result["id"], "voucher_id": result["voucherId"]}
             )
         else:
-            self.notice.set(
+            self._set_notice(
                 _("Gesendet; Lexware-Datei %(file_id)s und Beleg %(voucher_id)s.")
                 % {"file_id": result["id"], "voucher_id": result["voucherId"]}
             )
-        self._load_documents()
+        self._reload_documents()
+        self._maybe_close_after_completion()
 
 
 def run_desktop(data_dir: Path | None) -> None:
@@ -765,6 +1230,11 @@ def run_desktop(data_dir: Path | None) -> None:
         raise
     from . import cli
 
+    if os.environ.get(DESKTOP_SMOKE_ENV):
+        from .desktop_smoke import run_desktop_smoke
+
+        run_desktop_smoke(tk, ttk, messagebox)
+        return
     store = Store(data_dir or cli.default_data_dir())
     account, gmail = cli.gmail_client()
     remote = cli.lexware_client()

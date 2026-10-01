@@ -20,11 +20,28 @@ class DocumentRejected(RuntimeError):
         super().__init__(f"Lexware rejected document (HTTP {status_code})")
 
 
+class RemoteAuthError(RuntimeError):
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+        super().__init__(f"remote authentication failed (HTTP {status_code})")
+
+
 class LocalIntegrityError(RuntimeError):
     pass
 
 
 class TransferActiveError(RuntimeError):
+    pass
+
+
+class OperationCancelled(RuntimeError):
+    def __init__(self, completed: int = 0, total: int = 0):
+        self.completed = completed
+        self.total = total
+        super().__init__("operation cancelled")
+
+
+class UploadOutcomeUncertain(RuntimeError):
     pass
 
 
@@ -208,6 +225,9 @@ class Store:
         uploader: Callable[[bytes, str], dict[str, str]],
         refresh: Callable[[], Any] | None = None,
         verify: Callable[[str, str], bytes] | None = None,
+        *,
+        cancelled: Callable[[], bool] | None = None,
+        phase: Callable[[str], None] | None = None,
     ) -> dict[str, str]:
         self._validate_digest(digest)
         with self._upload_lock(digest) as acquired:
@@ -224,8 +244,10 @@ class Store:
             if status == "rejected":
                 raise DocumentRejected(rejection_status or 400)
             if status in {"uploading", "uncertain"}:
-                raise RuntimeError("upload outcome is uncertain; reconcile before retry")
+                raise UploadOutcomeUncertain("upload outcome is uncertain; reconcile before retry")
+            self._raise_if_cancelled(cancelled)
             data = self._read_staged(digest)
+            self._raise_if_cancelled(cancelled)
             if refresh is not None:
                 refresh()
                 presence = self.remote_presence(digest)
@@ -235,6 +257,7 @@ class Store:
                     verified = verify(presence["id"], presence["voucherId"])
                     if not isinstance(verified, bytes) or hashlib.sha256(verified).hexdigest() != digest:
                         raise RuntimeError("remote document does not match staged bytes")
+                    self._raise_if_cancelled(cancelled)
                     with self._connection() as connection:
                         connection.execute(
                             "UPDATE documents SET status='uploaded', id=?, voucher_id=?, rejection_status=NULL, origin='already_present' "
@@ -247,6 +270,9 @@ class Store:
                         "voucherId": presence["voucherId"],
                         "status": "already_present",
                     }
+            self._raise_if_cancelled(cancelled)
+            if phase is not None:
+                phase("uploading")
             with self._connection() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute("UPDATE documents SET status='uploading' WHERE hash=?", (digest,))
@@ -273,7 +299,7 @@ class Store:
                     connection.commit()
                 if isinstance(error, ValueError):
                     raise
-                raise RuntimeError("upload outcome is uncertain; reconcile before retry") from error
+                raise UploadOutcomeUncertain("upload outcome is uncertain; reconcile before retry") from error
             with self._connection() as connection:
                 connection.execute(
                     "UPDATE documents SET status='uploaded', id=?, voucher_id=?, rejection_status=NULL, origin=? "
@@ -530,6 +556,11 @@ class Store:
                         import fcntl
 
                         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+    @staticmethod
+    def _raise_if_cancelled(cancelled: Callable[[], bool] | None) -> None:
+        if cancelled is not None and cancelled():
+            raise OperationCancelled()
 
     @staticmethod
     def _validate_digest(digest: str) -> None:

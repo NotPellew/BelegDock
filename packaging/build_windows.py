@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 PYINSTALLER_VERSION = "6.11.1"
@@ -91,6 +92,19 @@ REQUIRED_MODULES = (
 
 SILENT_FLAGS = ["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"]
 DESKTOP_CREDENTIAL_FAILURE = "Desktop-Vorgang fehlgeschlagen"
+DESKTOP_SMOKE_ENV = "BELEGDOCK_DESKTOP_SMOKE"
+DESKTOP_SMOKE_DUMP_ENV = "BELEGDOCK_DESKTOP_SMOKE_DUMP"
+DESKTOP_SMOKE_DATA_ENV = "BELEGDOCK_DESKTOP_SMOKE_DATA"
+DESKTOP_SMOKE_TERMINAL_STATES = {"terminal", "error", "timeout"}
+DESKTOP_SMOKE_REQUIRED_STATES = (
+    "labels",
+    "candidates",
+    "progress",
+    "staged",
+    "uncancellable",
+    "layout",
+    "terminal",
+)
 
 
 def desktop_probe_is_credential_failure(returncode: int, stderr: str) -> bool:
@@ -474,6 +488,75 @@ def _start_menu_link() -> Path:
     )
 
 
+def _desktop_smoke_records(path: Path) -> list[dict]:
+    if not path.is_file():
+        return []
+    records = []
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            record = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            records.append(record)
+    return records
+
+
+def _desktop_smoke_finished(path: Path) -> bool:
+    return any(
+        str(record.get("state")) in DESKTOP_SMOKE_TERMINAL_STATES
+        for record in _desktop_smoke_records(path)
+    )
+
+
+def _run_desktop_smoke(gui_executable: Path, work_dir: Path) -> None:
+    dump = work_dir / "desktop-smoke.jsonl"
+    dump.write_text("", encoding="utf-8")
+    environment = dict(os.environ)
+    environment[DESKTOP_SMOKE_ENV] = "1"
+    environment[DESKTOP_SMOKE_DUMP_ENV] = str(dump)
+    environment[DESKTOP_SMOKE_DATA_ENV] = str(work_dir / "data")
+    process = subprocess.Popen([str(gui_executable)], env=environment)
+    try:
+        _require(
+            _wait_until(lambda: _desktop_smoke_finished(dump), timeout=180.0),
+            "desktop smoke did not reach a terminal state",
+        )
+        try:
+            returncode = process.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            returncode = None
+        _require(returncode == 0, "desktop smoke exited with an error")
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+    records = _desktop_smoke_records(dump)
+    for record in records:
+        _require(
+            record.get("state") not in {"error", "timeout"},
+            f"desktop smoke reported {record}",
+        )
+    states = [str(record.get("state")) for record in records]
+    positions = {}
+    for required in DESKTOP_SMOKE_REQUIRED_STATES:
+        _require(required in states, f"desktop smoke missed state {required}")
+        positions[required] = states.index(required)
+    ordered = [positions[required] for required in DESKTOP_SMOKE_REQUIRED_STATES]
+    _require(ordered == sorted(ordered), "desktop smoke reached states out of order")
+    blobs = work_dir / "data" / "blobs"
+    _require(
+        blobs.is_dir() and any(blobs.iterdir()),
+        "desktop smoke left no staged attachments in the data directory",
+    )
+
+
 def cmd_smoke_install(args: argparse.Namespace) -> int:
     if sys.platform != "win32":
         raise SystemExit("smoke-install is supported on Windows only")
@@ -511,6 +594,12 @@ def cmd_smoke_install(args: argparse.Namespace) -> int:
         "desktop probe did not report the console credential failure",
     )
     _require(data_dir_is_external(data_dir, install_dir), "user data is inside the install directory")
+
+    smoke_root = Path(tempfile.mkdtemp(prefix="belegdock-desktop-smoke-"))
+    try:
+        _run_desktop_smoke(install_dir / GUI_EXE, smoke_root)
+    finally:
+        shutil.rmtree(smoke_root, ignore_errors=True)
 
     install_path = str(install_dir).lower()
     _run([install_dir / "unins000.exe", *SILENT_FLAGS])

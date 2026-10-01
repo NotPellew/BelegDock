@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock
 
 from belegdock.desktop import DesktopApplication
+from async_dispatch_test_helper import ManualOperationDispatcher
 
 
 class DesktopAlreadyPresentTests(unittest.TestCase):
@@ -44,8 +45,14 @@ class DesktopAlreadyPresentTests(unittest.TestCase):
         app.notice = Notice()
         app.messagebox = Confirmation()
         app._load_documents = Mock()
+        dispatcher = ManualOperationDispatcher()
+        app._dispatch_operation = dispatcher
 
         app._upload()
+
+        app.service.upload.assert_not_called()
+        self.assertEqual(dispatcher.pending_count, 1)
+        dispatcher.complete_next()
 
         self.assertIn("bereits in lexware vorhanden", app.notice.value.lower())
         self.assertIn("nichts gesendet", app.notice.value.lower())
