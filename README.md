@@ -154,6 +154,8 @@ Befehle für noch nicht abgeschlossene Dokumente. Mit `--json` wird die Zusammen
 im maschinenlesbaren JSON-Format ausgegeben. Bei einem uninitialisierten Verzeichnis
 wird ohne Änderungen am Dateisystem ein leerer Status gemeldet.
 
+Bei Fehlern gibt BelegDock standardmäßig kurze, sichere Hinweise ohne geheime Daten oder Pfade aus. Mit `-v` / `--verbose` oder der Umgebungsvariable `BELEGDOCK_VERBOSE=1` wird auf stderr eine zusätzliche Zeile `Fehlerdetails: <Typ>: <Meldung>` ausgegeben, die den genauen Ausnahmegrund (z. B. fehlendes Gmail-Label, Lexware-Rate-Limit oder Authentifizierungsfehler) benennt, ohne geheime Token oder Tracebacks offenzulegen.
+
 Ein bestätigter Upload-Hash wird nicht erneut gesendet. Eine dokumentierte
 Lexware-Ablehnung (HTTP 400 oder 406) wird als `rejected` gespeichert; das Dokument
 korrigieren und seine neuen Bytes vorbereiten. `uploading` und `uncertain` blockieren

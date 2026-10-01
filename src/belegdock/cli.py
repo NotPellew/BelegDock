@@ -1,6 +1,8 @@
 import argparse
 import getpass
 import json
+import os
+import re
 import sys
 from collections.abc import Sequence
 from importlib import import_module
@@ -279,6 +281,27 @@ def document_status(data_dir: Path, digest: str) -> tuple[str | None, bool]:
     return None, True
 
 
+def is_verbose(args: argparse.Namespace) -> bool:
+    if getattr(args, "verbose", False):
+        return True
+    return os.environ.get("BELEGDOCK_VERBOSE", "").strip().lower() in {"1", "true", "yes"}
+
+
+def format_verbose_exception(error: BaseException) -> str:
+    message = str(error).replace("\n", " ").strip()
+    message = re.sub(r"(Bearer\s+)[^\s'\"]+", r"\1***", message, flags=re.IGNORECASE)
+    for name in ("lexware", "gmail"):
+        try:
+            secret = accounts.load_secret(name)
+            if secret and secret in message:
+                message = message.replace(secret, "***")
+        except Exception:
+            pass
+    if message:
+        return f"Fehlerdetails: {type(error).__name__}: {message}"
+    return f"Fehlerdetails: {type(error).__name__}"
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = GermanArgumentParser(
         prog="belegdock",
@@ -294,6 +317,12 @@ def make_parser() -> argparse.ArgumentParser:
         version=__version__,
         help="Versionsnummer anzeigen und beenden",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Ausführliche Fehlerdetails auf stderr ausgeben",
+    )
     parser.add_argument("--data-dir", type=Path, help="Lokales Staging- und SQLite-Verzeichnis überschreiben")
     parser._optionals.title = "Optionen"
     commands = parser.add_subparsers(dest="command", title="Befehle", parser_class=GermanArgumentParser)
@@ -306,6 +335,13 @@ def make_parser() -> argparse.ArgumentParser:
             **kwargs,
         )
         command.add_argument("-h", "--help", action="help", help="Diese Hilfe anzeigen und beenden")
+        command.add_argument(
+            "-v",
+            "--verbose",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help="Ausführliche Fehlerdetails auf stderr ausgeben",
+        )
         command._optionals.title = "Optionen"
         return command
 
@@ -449,21 +485,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"Lexware hat den Upload abgelehnt (HTTP {error.status_code}); korrigiere das Dokument und bereite die neuen Bytes vor.",
             file=sys.stderr,
         )
+        if is_verbose(args):
+            print(format_verbose_exception(error), file=sys.stderr)
         return 1
-    except LocalIntegrityError:
+    except LocalIntegrityError as error:
         if hasattr(args, "hash") and valid_document_hash(args.hash):
             print(
                 single_document_integrity_failure_message(args.data_dir or default_data_dir(), args.hash),
                 file=sys.stderr,
             )
-            return 1
-        print(
-            "Lokale Daten sind nicht verfügbar; stelle state.sqlite3 und blobs aus einer konsistenten Sicherung wieder her. "
-            "Wiederherstellung ist erforderlich.",
-            file=sys.stderr,
-        )
+        else:
+            print(
+                "Lokale Daten sind nicht verfügbar; stelle state.sqlite3 und blobs aus einer konsistenten Sicherung wieder her. "
+                "Wiederherstellung ist erforderlich.",
+                file=sys.stderr,
+            )
+        if is_verbose(args):
+            print(format_verbose_exception(error), file=sys.stderr)
         return 1
-    except TransferActiveError:
+    except TransferActiveError as error:
         if args.command == "recover-upload":
             print(
                 "Wiederherstellung fehlgeschlagen; ein aktives Senden kann nicht wiederhergestellt werden. "
@@ -473,15 +513,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         else:
             print(transfer_active_wait_message(args.hash), file=sys.stderr)
+        if is_verbose(args):
+            print(format_verbose_exception(error), file=sys.stderr)
         return 1
-    except DesktopUnavailableError:
+    except DesktopUnavailableError as error:
         print(
             "Desktop-Oberfläche ist nicht verfügbar; installiere Python-Tk-Unterstützung "
             "und starte „belegdock desktop“ erneut.",
             file=sys.stderr,
         )
+        if is_verbose(args):
+            print(format_verbose_exception(error), file=sys.stderr)
         return 1
-    except Exception:
+    except Exception as error:
         if args.command == "stage":
             message = "Vorbereiten fehlgeschlagen; prüfe Auswahl, Verbindung, Dateigröße und lokalen Speicher."
         elif args.command == "upload":
@@ -572,4 +616,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             message = "Vorgang fehlgeschlagen; prüfe Kontoverbindung, Label und lokalen Speicher."
         print(message, file=sys.stderr)
+        if is_verbose(args):
+            print(format_verbose_exception(error), file=sys.stderr)
         return 1

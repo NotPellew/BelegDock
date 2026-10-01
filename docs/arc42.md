@@ -78,6 +78,7 @@ These are module responsibilities, not separate services or a plugin system.
 6. Record documented HTTP 400/406 rejections separately from uncertain remote outcomes.
 7. Reconcile an uncertain result only through explicit remote file and voucher reads.
 8. Inspect local transfer and inventory state offline via `status` without making network requests or mutating stored state.
+9. Surface root-cause exception class and message on stderr via `--verbose` / `-v` or `BELEGDOCK_VERBOSE=1` without altering default output, exit codes, or leaking secrets/tracebacks.
 
 Desktop operations run off the Tk event loop through one daemon worker thread and a
 queue drained by a `root.after` pump, so widgets are only touched on the event loop.
@@ -170,6 +171,9 @@ and host sockets are not. The session gets a temporary home and /tmp.
   already-ambiguous outcome), `RemoteAuthError` (HTTP 401/403), plus the existing
   `DocumentRejected`, `LocalIntegrityError`, and `TransferActiveError`. The desktop
   view turns them into fixed German guidance without logging document contents.
+  CLI failures emit standard category guidance by default and append a single safe
+  `Fehlerdetails: <Typ>: <Meldung>` line on stderr when `--verbose` or `BELEGDOCK_VERBOSE`
+  is active, suppressing Python tracebacks and redacting stored credentials.
 - Use the OS credential store and fail explicitly when unavailable. No silent
   plaintext fallback. Keep credentials, message bodies, and document contents out
   of logs and test fixtures.
