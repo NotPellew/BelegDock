@@ -1,11 +1,7 @@
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 import json
-from pathlib import Path
-import sqlite3
 from unittest.mock import patch
-
-import pytest
 
 from belegdock import cli
 from belegdock.workflow import Store
@@ -32,7 +28,7 @@ def test_status_uninitialized_directory_reports_empty_and_does_not_create_files(
 def test_status_human_readable_output_with_various_document_states(tmp_path):
     store = Store(tmp_path)
     # Stage sample files
-    d_staged = store.stage("acc", "m1", "p1", "doc1.pdf", b"bytes1")
+    store.stage("acc", "m1", "p1", "doc1.pdf", b"bytes1")
     d_uploading = store.stage("acc", "m2", "p2", "doc2.pdf", b"bytes2")
     d_uncertain = store.stage("acc", "m3", "p3", "doc3.pdf", b"bytes3")
     d_uploaded = store.stage("acc", "m4", "p4", "doc4.pdf", b"bytes4")
