@@ -35,11 +35,11 @@ GROUPS = (
     ("rejected_upload_guidance", "59efa18d82dc4823ad7d736f6ee7c26fbdbd7dbd", "test_cli_rejected_upload_guidance.py", 1, {"AssertionError"}),
     ("uploaded_upload_guidance", "13cbb07959104aa6afc06d0375bb5fa2bf07517e", "test_cli_uploaded_upload_guidance.py", 1, {"AssertionError"}),
     ("recovery_lock_guidance", "b685ab9ba35238c85e4de658fa3c0ab3004e40b6", "test_cli_recovery_lock_guidance.py", 3, {"AssertionError"}),
-    ("desktop_already_present", "c13c26ef4e71d8b1b65ed08efcc9016a518b280a", "test_desktop_already_present.py", 2, {"AssertionError"}),
+    ("desktop_already_present", "df3083844beef9014508650b28360098ee662d4b", "test_desktop_already_present.py", 1, {"AssertionError"}),
     ("desktop_detail_reset", "06d0ed8aaf42a01f576365b368f6fd062f011d66", "test_desktop_detail_reset.py", 1, {"AssertionError"}),
     ("desktop_integrity", "98dc704b5567c14ac509a4d1fe5e794d7d656c98", "test_desktop_integrity.py", 1, {"AssertionError"}),
     ("desktop_layout_states", "8cbd5911c035c0b6d2cd19af6b232931d15716b5", "test_desktop_layout_states.py", 2, {"AssertionError"}),
-    ("desktop_states", "316a37320075b6135d59e782d98e06c75c11c7f7", "test_desktop_states.py", 2, {"AssertionError"}),
+    ("desktop_states", "df3083844beef9014508650b28360098ee662d4b", "test_desktop_states.py", 1, {"AssertionError"}),
     ("desktop_ui_polish", "fe283fc6f5ad8b74592e4f6f965ebe7a71594b28", "test_desktop_ui_polish.py", 3, {"AssertionError"}),
     ("restore_integrity", "7bf3d5ac2a4ec52d7acdd09349bca4f81f546941", "test_restore_integrity.py", 2, {"AssertionError"}),
     ("restore_integrity_bounds", "b3fb5e90d3df182a8bc1eb418100ab4b6a058e68", "test_restore_integrity_bounds.py", 1, {"AssertionError"}),
@@ -55,28 +55,32 @@ GROUPS = (
     ("windows_packaging_path_scan_boundaries", "b407b90b2ca47aa8a6087b287c3dc1c5f565354d", "test_windows_packaging_path_scan_boundaries.py", 1, {"AssertionError"}),
     ("windows_packaging_path_scan_prefixes", "bb8db9356278a5ece97039e96e3f54e5f3747c8f", "test_windows_packaging_path_scan_prefixes.py", 1, {"AssertionError"}),
     ("desktop_launch", "29d8232bdeb2c331cdb77d4211c9ff96bf00301f", "test_desktop_launch.py", 3, {"AssertionError"}),
-    ("scan_classification", "da035b9c7c061e77d3dedc37f8a651346cf10a45", "test_scan_classifier.py", 10, {"AssertionError"}),
-    ("scan_classification_review", "eb25ed2e36f3650a6e3e73d0f0c69d8d0896923c", "test_scan_classifier_review.py", 4, {"AssertionError"}),
+    ("scan_classification", "df3083844beef9014508650b28360098ee662d4b", "test_scan_classifier.py", 1, {"AssertionError"}),
+    ("scan_classification_review", "df3083844beef9014508650b28360098ee662d4b", "test_scan_classifier_review.py", 1, {"AssertionError"}),
     ("scan_classification_final", "6c9ae0c68b13eebc950d65d5d09eca161ffca467", "test_scan_classifier_final.py", 2, {"AssertionError"}),
     ("scan_classification_layout", "0cbbb98164126c34e395cc0b283a8dead41c2cf3", "test_scan_classifier_layout.py", 1, {"AssertionError"}),
 )
 
 
+REPLAY_HELPER_PATH = "tests/app/async_dispatch_test_helper.py"
+
+
+def _revision_has_path(repo, revision, path):
+    probe = subprocess.run(
+        ["git", "cat-file", "-e", f"{revision}:{path}"], cwd=repo, capture_output=True
+    )
+    return probe.returncode == 0
+
+
 FOCUSED = {
-    "desktop_already_present": {
-        "test_already_present_document_has_a_distinct_state",
-        "test_already_present_result_says_no_upload_was_sent",
-    },
+    "desktop_already_present": {"test_already_present_result_says_no_upload_was_sent"},
     "desktop_detail_reset": {"test_reload_clears_detail_values_for_removed_document"},
     "desktop_integrity": {"test_damaged_document_is_not_ready_or_uploadable_and_shows_restore_guidance"},
     "desktop_layout_states": {
         "test_action_states_keep_remote_outcomes_no_send",
         "test_clearing_selection_resets_action_region_and_disables_send",
     },
-    "desktop_states": {
-        "test_rejection_shows_corrective_guidance_not_uncertain_guidance",
-        "test_uncertain_document_shows_cli_only_recovery_guidance",
-    },
+    "desktop_states": {"test_rejection_shows_corrective_guidance_not_uncertain_guidance"},
     "desktop_ui_polish": {
         "test_file_sizes_are_human_readable",
         "test_status_codes_have_readable_labels",
@@ -88,6 +92,8 @@ FOCUSED = {
     },
     "restore_integrity_bounds": {"test_unusable_database_cli_gives_restore_guidance_without_creating_blobs"},
     "upload_reconciliation": {"test_cli_reports_a_sanitized_documented_rejection"},
+    "scan_classification": {"test_candidate_table_displays_type_and_recommendation_without_selecting"},
+    "scan_classification_review": {"test_desktop_keeps_candidate_when_optional_classification_is_stale"},
 }
 
 
@@ -191,7 +197,10 @@ def replay(repo, output):
     for name, checkpoint, filename, count, allowed in GROUPS:
         revision = subprocess.check_output(["git", "rev-parse", checkpoint], cwd=repo, text=True).strip()
         test_path = "tests/app/" + filename
-        archived = subprocess.check_output(["git", "archive", revision, "src", test_path], cwd=repo)
+        archived_paths = ["src", test_path]
+        if _revision_has_path(repo, revision, REPLAY_HELPER_PATH):
+            archived_paths.append(REPLAY_HELPER_PATH)
+        archived = subprocess.check_output(["git", "archive", revision, *archived_paths], cwd=repo)
         artifact = output / name
         artifact.mkdir()
         with tempfile.TemporaryDirectory(prefix="belegdock-red-replay-") as temporary:

@@ -2,13 +2,13 @@ import base64
 import binascii
 import hashlib
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import PurePath
 from typing import Any
 from urllib.parse import quote
 
 from .classification import CandidateClassification, classify_candidate
-from .workflow import DocumentRejected
+from .workflow import DocumentRejected, OperationCancelled, RemoteAuthError
 
 MAX_FILE_SIZE = 5_000_000
 _MIME_TYPES = {".pdf": "application/pdf", ".xml": "application/xml"}
@@ -51,7 +51,9 @@ class GmailAdapter:
         labels = self.service.users().labels().list(userId="me").execute().get("labels", [])
         return [item["name"] for item in labels if isinstance(item, Mapping) and isinstance(item.get("name"), str)]
 
-    def candidates(self, label_name: str) -> list[dict[str, Any]]:
+    def candidates(
+        self, label_name: str, *, cancelled: Callable[[], bool] | None = None
+    ) -> list[dict[str, Any]]:
         self._candidate_classifications = {}
         labels = self.service.users().labels().list(userId="me").execute().get("labels", [])
         label_id = next((item.get("id") for item in labels if item.get("name") == label_name), None)
@@ -61,11 +63,13 @@ class GmailAdapter:
         candidates: list[dict[str, Any]] = []
         page_token: str | None = None
         while True:
+            self._raise_if_cancelled(cancelled)
             parameters: dict[str, Any] = {"userId": "me", "labelIds": [label_id]}
             if page_token:
                 parameters["pageToken"] = page_token
             page = self.service.users().messages().list(**parameters).execute()
             for summary in page.get("messages", []):
+                self._raise_if_cancelled(cancelled)
                 message_id = summary.get("id")
                 if not message_id:
                     continue
@@ -79,6 +83,11 @@ class GmailAdapter:
             if not page_token:
                 break
         return candidates
+
+    @staticmethod
+    def _raise_if_cancelled(cancelled: Callable[[], bool] | None) -> None:
+        if cancelled is not None and cancelled():
+            raise OperationCancelled()
 
     def candidate_classification(self, candidate_id: str) -> CandidateClassification:
         try:
@@ -180,6 +189,8 @@ class LexwareAdapter:
         )
         if response.status_code in {400, 406}:
             raise DocumentRejected(response.status_code)
+        if response.status_code in {401, 403}:
+            raise RemoteAuthError(response.status_code)
         if response.status_code != 202:
             raise RuntimeError("Lexware upload failed")
         result = response.json()

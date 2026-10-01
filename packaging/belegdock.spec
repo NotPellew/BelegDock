@@ -8,6 +8,7 @@ HIDDEN_IMPORTS = [
     "belegdock",
     "belegdock.cli",
     "belegdock.desktop",
+    "belegdock.desktop_smoke",
     "google_auth_oauthlib.flow",
     "google.auth.transport.requests",
     "google.oauth2.credentials",
