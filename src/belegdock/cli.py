@@ -131,6 +131,57 @@ def local_integrity_restore_message() -> str:
     )
 
 
+def format_damaged_documents_message(documents: list[dict[str, Any]]) -> str:
+    damaged = sorted(
+        [item for item in documents if item.get("localIntegrity") != "ok"],
+        key=lambda item: (str(item.get("filename") or ""), str(item.get("hash") or "")),
+    )
+    if not damaged:
+        return local_integrity_restore_message()
+    lines = ["Lokale Dokumentintegrität fehlgeschlagen; folgende Dateien sind beschädigt oder fehlen:"]
+    status_map = {
+        "missing": "fehlt (missing)",
+        "corrupt": "ist beschädigt (corrupt)",
+        "unreadable": "ist nicht lesbar (unreadable)",
+    }
+    for item in damaged[:5]:
+        filename = item.get("filename") or "Dokument"
+        digest = item.get("hash") or ""
+        integrity = item.get("localIntegrity") or "beschädigt"
+        status_desc = status_map.get(integrity, f"ist {integrity}")
+        lines.append(f"  - {filename} ({digest}): Blob {status_desc}")
+    if len(damaged) > 5:
+        remaining = len(damaged) - 5
+        lines.append(f"  ... und {remaining} weitere beschädigte Dokumente")
+    lines.append(local_integrity_restore_message())
+    return "\n".join(lines)
+
+
+def single_document_integrity_failure_message(data_dir: Path, digest: str) -> str:
+    filename = "Dokument"
+    integrity = "beschädigt"
+    try:
+        store = Store(data_dir)
+        for doc in store.list_documents(digest):
+            if doc.get("hash") == digest:
+                filename = doc.get("filename") or filename
+                integrity = doc.get("localIntegrity") or integrity
+                break
+    except Exception:
+        pass
+    status_map = {
+        "missing": "fehlt (missing)",
+        "corrupt": "ist beschädigt (corrupt)",
+        "unreadable": "ist nicht lesbar (unreadable)",
+    }
+    status_desc = status_map.get(integrity, f"ist {integrity}")
+    return (
+        f"Lokale Dokumentintegrität fehlgeschlagen für {filename} ({digest}): Blob {status_desc}. "
+        "Lokale Daten sind nicht verfügbar; stelle state.sqlite3 und blobs aus einer konsistenten Sicherung wieder her. "
+        + local_integrity_restore_message()
+    )
+
+
 def empty_status_summary(data_dir: Path) -> dict[str, Any]:
     return {
         "dataDir": str(data_dir),
@@ -379,11 +430,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(format_status_human(result))
         elif args.command != "desktop":
             print(json.dumps(result, ensure_ascii=True))
+        if args.command == "scan" and len(result) == 0:
+            print(
+                f"Keine PDF- oder XML-Anhänge im Gmail-Label '{args.label}' gefunden.",
+                file=sys.stderr,
+            )
         if args.command == "documents" and any(
             item.get("localIntegrity") != "ok" for item in result
         ):
             print(
-                local_integrity_restore_message(),
+                format_damaged_documents_message(result),
                 file=sys.stderr,
             )
             return 1
@@ -395,6 +451,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
     except LocalIntegrityError:
+        if hasattr(args, "hash") and valid_document_hash(args.hash):
+            print(
+                single_document_integrity_failure_message(args.data_dir or default_data_dir(), args.hash),
+                file=sys.stderr,
+            )
+            return 1
         print(
             "Lokale Daten sind nicht verfügbar; stelle state.sqlite3 und blobs aus einer konsistenten Sicherung wieder her. "
             "Wiederherstellung ist erforderlich.",
@@ -428,7 +490,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
                 if status == LOCAL_INTEGRITY_FAILED:
-                    message = local_integrity_restore_message()
+                    message = single_document_integrity_failure_message(args.data_dir or default_data_dir(), args.hash)
                 elif not status_available:
                     message = (
                         f"Sendeergebnis für {args.hash} konnte nicht geprüft werden; nicht erneut senden. "
@@ -459,7 +521,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
                 if status == LOCAL_INTEGRITY_FAILED:
-                    message = local_integrity_restore_message()
+                    message = single_document_integrity_failure_message(args.data_dir or default_data_dir(), args.hash)
                 elif not status_available:
                     message = recovery_state_unavailable_message(args.hash)
                 elif status == "uncertain":
@@ -482,7 +544,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             else:
                 status, status_available = document_status(args.data_dir or default_data_dir(), args.hash)
                 if status == LOCAL_INTEGRITY_FAILED:
-                    message = local_integrity_restore_message()
+                    message = single_document_integrity_failure_message(args.data_dir or default_data_dir(), args.hash)
                 elif not status_available:
                     message = recovery_state_unavailable_message(args.hash)
                 elif status == "uncertain":

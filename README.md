@@ -114,7 +114,9 @@ Fehler ausgegeben.
 
 `--select` für weitere Anhänge wiederholen. Das Scannen sendet nichts; Gmail-
 Nachrichtenantworten können Inline-Anhangsdaten enthalten, aber nur ausdrücklich
-ausgewählte Anhänge werden vorbereitet. PDF/XML-Dateinamen kennzeichnen
+ausgewählte Anhänge werden vorbereitet. Wenn ein Label keine PDF- oder XML-Anhänge
+enthält, gibt `scan` das leere JSON-Array `[]` aus und erläutert auf stderr, dass keine
+passenden Anhänge gefunden wurden. PDF/XML-Dateinamen kennzeichnen
 Kandidaten, sind aber keine geprüften Rechnungen. Die konservative Größenbegrenzung
 beträgt 5.000.000 Bytes pro Anhang. Bytegleiche Duplikate teilen sich einen Blob,
 während jedes Quellvorkommen erhalten bleibt.
@@ -141,7 +143,8 @@ Verzeichnis bereits Vorbereitungsartefakte enthält, aber `state.sqlite3` fehlt 
 leer ist, wird die Initialisierung abgelehnt, damit eine unvollständige
 Wiederherstellung keinen lokalen Zustand verdeckt. `documents` prüft jeden
 gespeicherten Blob und meldet `localIntegrity` als `ok`, `missing`, `corrupt` oder
-`unreadable`; ein beschädigtes Ergebnis führt zu einem Fehlerstatus mit Hinweis zur
+`unreadable`; ein beschädigtes Ergebnis führt zu einem Fehlerstatus, nennt die betroffenen
+Dokumente mit Dateinamen, Hash und Schadensart auf stderr und gibt Hinweise zur
 Wiederherstellung.
 
 `status` fasst den lokalen Übertragungszustand offline zusammen: das Datenverzeichnis,
