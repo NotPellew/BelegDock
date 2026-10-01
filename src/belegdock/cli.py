@@ -23,6 +23,7 @@ QUICK_START = """Schnellstart:
   belegdock scan --label LABEL
   belegdock stage --label LABEL --select MESSAGE_ID:PART_ID
   belegdock documents
+  belegdock status
   belegdock refresh
   belegdock upload SHA256_HASH
 
@@ -130,6 +131,82 @@ def local_integrity_restore_message() -> str:
     )
 
 
+def empty_status_summary(data_dir: Path) -> dict[str, Any]:
+    return {
+        "dataDir": str(data_dir),
+        "totalDocuments": 0,
+        "counts": {
+            "staged": 0,
+            "uploading": 0,
+            "uncertain": 0,
+            "uploaded": 0,
+            "rejected": 0,
+        },
+        "integrityIssues": 0,
+        "remoteRefresh": {
+            "status": None,
+            "refreshedAt": None,
+            "organizationId": None,
+        },
+        "nextActions": [],
+        "initialized": False,
+    }
+
+
+def format_status_human(summary: dict[str, Any]) -> str:
+    lines = [
+        "BelegDock-Status:",
+        f"  Datenverzeichnis: {summary['dataDir']}",
+        f"  Dokumente gesamt: {summary['totalDocuments']}",
+        f"    Vorbereitet (staged):      {summary['counts']['staged']}",
+        f"    Wird gesendet (uploading): {summary['counts']['uploading']}",
+        f"    Unklar (uncertain):        {summary['counts']['uncertain']}",
+        f"    Gesendet (uploaded):       {summary['counts']['uploaded']}",
+        f"    Abgelehnt (rejected):      {summary['counts']['rejected']}",
+    ]
+    if summary.get("integrityIssues", 0) > 0:
+        lines.append(
+            f"  Beschädigte lokale Dokumente: {summary['integrityIssues']} "
+            "(Dateien fehlen oder sind beschädigt; siehe README.md für Wiederherstellung)"
+        )
+    refresh = summary.get("remoteRefresh") or {}
+    if refresh.get("status"):
+        status_text = "Erfolg" if refresh["status"] == "success" else "Fehlgeschlagen"
+        time_text = f" ({refresh['refreshedAt']})" if refresh.get("refreshedAt") else ""
+        lines.append(f"  Letzte Lexware-Aktualisierung: {status_text}{time_text}")
+    elif summary.get("initialized", True):
+        lines.append("  Letzte Lexware-Aktualisierung: Noch keine Aktualisierung durchgeführt")
+
+    next_actions = summary.get("nextActions") or []
+    if next_actions:
+        lines.append("")
+        lines.append("Nächste empfohlene Schritte:")
+        by_status: dict[str, list[dict[str, str]]] = {}
+        for action in next_actions:
+            by_status.setdefault(action["status"], []).append(action)
+
+        status_labels = {
+            "uncertain": "unklar",
+            "uploading": "wird gesendet",
+            "staged": "vorbereitet",
+        }
+        for status_key in ("uncertain", "uploading", "staged"):
+            items = by_status.get(status_key, [])
+            if not items:
+                continue
+            for action in items[:5]:
+                lines.append(f"  [{status_labels.get(status_key, status_key)}] {action['command']}")
+            if len(items) > 5:
+                remaining = len(items) - 5
+                label_plural = {
+                    "uncertain": "unklare",
+                    "uploading": "unterbrochene",
+                    "staged": "vorbereitete",
+                }.get(status_key, status_key)
+                lines.append(f"  ... und {remaining} weitere {label_plural} Dokumente")
+    return "\n".join(lines)
+
+
 def valid_document_hash(digest: str) -> bool:
     try:
         Store._validate_digest(digest)
@@ -200,6 +277,8 @@ def make_parser() -> argparse.ArgumentParser:
                 help="Kandidaten-ID aus scan; für mehrere Auswahl wiederholen",
             )
     add_command("documents", help="Lokale Dokumente und Übertragungsstatus auflisten")
+    status_cmd = add_command("status", help="Lokalen Übertragungsstatus und nächste Schritte zusammenfassen")
+    status_cmd.add_argument("--json", action="store_true", help="Ausgabe im JSON-Format erzeugen")
     add_command("desktop", help="Lokale Desktop-Oberfläche für die Dokumentübertragung öffnen")
     add_command("refresh", help="Lokales Lexware-Dateiinventar aktualisieren")
     upload = add_command("upload", help="Einen vorbereiteten Hash ausdrücklich senden")
@@ -231,6 +310,11 @@ def dispatch(args: argparse.Namespace) -> Any:
         if selected - {item["id"] for item in candidates}:
             raise ValueError("Unknown selection; scan the label again.")
     data_dir = args.data_dir or default_data_dir()
+    if args.command == "status":
+        state_db = data_dir / "state.sqlite3"
+        if not data_dir.exists() or (not state_db.exists() and not any(data_dir.iterdir())):
+            return empty_status_summary(data_dir)
+        return Store(data_dir).status_summary()
     store = Store(data_dir)
     if args.command == "documents":
         return store.list_documents()
@@ -288,7 +372,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     try:
         result = dispatch(args)
-        if args.command != "desktop":
+        if args.command == "status":
+            if getattr(args, "json", False):
+                print(json.dumps(result, ensure_ascii=True))
+            else:
+                print(format_status_human(result))
+        elif args.command != "desktop":
             print(json.dumps(result, ensure_ascii=True))
         if args.command == "documents" and any(
             item.get("localIntegrity") != "ok" for item in result

@@ -74,6 +74,7 @@ Hash aus `stage` übernehmen:
 belegdock scan --label "Rechnungen"
 belegdock stage --label "Rechnungen" --select "MESSAGE_ID:PART_ID"
 belegdock documents
+belegdock status
 belegdock refresh
 belegdock upload SHA256_HASH
 ```
@@ -142,6 +143,13 @@ Wiederherstellung keinen lokalen Zustand verdeckt. `documents` prüft jeden
 gespeicherten Blob und meldet `localIntegrity` als `ok`, `missing`, `corrupt` oder
 `unreadable`; ein beschädigtes Ergebnis führt zu einem Fehlerstatus mit Hinweis zur
 Wiederherstellung.
+
+`status` fasst den lokalen Übertragungszustand offline zusammen: das Datenverzeichnis,
+die Dokumentanzahl pro Status (`staged`, `uploading`, `uncertain`, `uploaded`,
+`rejected`), den Zustand der letzten Lexware-Aktualisierung sowie konkrete nächste
+Befehle für noch nicht abgeschlossene Dokumente. Mit `--json` wird die Zusammenfassung
+im maschinenlesbaren JSON-Format ausgegeben. Bei einem uninitialisierten Verzeichnis
+wird ohne Änderungen am Dateisystem ein leerer Status gemeldet.
 
 Ein bestätigter Upload-Hash wird nicht erneut gesendet. Eine dokumentierte
 Lexware-Ablehnung (HTTP 400 oder 406) wird als `rejected` gespeichert; das Dokument

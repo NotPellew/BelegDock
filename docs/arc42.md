@@ -76,6 +76,7 @@ These are module responsibilities, not separate services or a plugin system.
 5. Upload only explicitly selected documents and retain returned identifiers.
 6. Record documented HTTP 400/406 rejections separately from uncertain remote outcomes.
 7. Reconcile an uncertain result only through explicit remote file and voucher reads.
+8. Inspect local transfer and inventory state offline via `status` without making network requests or mutating stored state.
 
 Desktop operations run off the Tk event loop through one daemon worker thread and a
 queue drained by a `root.after` pump, so widgets are only touched on the event loop.
