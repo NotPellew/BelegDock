@@ -202,6 +202,59 @@ class Store:
             for row in rows
         ]
 
+    def status_summary(self) -> dict[str, Any]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT hash, filename, size, status FROM documents ORDER BY hash"
+            ).fetchall()
+            remote_rows = dict(connection.execute("SELECT key, value FROM remote_state").fetchall())
+        counts = {
+            "staged": 0,
+            "uploading": 0,
+            "uncertain": 0,
+            "uploaded": 0,
+            "rejected": 0,
+        }
+        integrity_issues = 0
+        next_actions: list[dict[str, str]] = []
+        for row in rows:
+            digest, filename, size, status = row
+            if status in counts:
+                counts[status] += 1
+            if self._blob_integrity(digest, size) != "ok":
+                integrity_issues += 1
+            if status == "uncertain":
+                next_actions.append({
+                    "hash": digest,
+                    "status": status,
+                    "command": f"belegdock reconcile {digest} --file-id FILE_ID --voucher-id VOUCHER_ID",
+                })
+            elif status == "uploading":
+                next_actions.append({
+                    "hash": digest,
+                    "status": status,
+                    "command": f"belegdock recover-upload {digest}",
+                })
+            elif status == "staged":
+                next_actions.append({
+                    "hash": digest,
+                    "status": status,
+                    "command": f"belegdock upload {digest}",
+                })
+        return {
+            "dataDir": str(self.data_dir),
+            "totalDocuments": len(rows),
+            "counts": counts,
+            "integrityIssues": integrity_issues,
+            "remoteRefresh": {
+                "status": remote_rows.get("refresh_status"),
+                "refreshedAt": remote_rows.get("refreshed_at") or remote_rows.get("refresh_failed_at"),
+                "organizationId": remote_rows.get("organization_id"),
+            },
+            "nextActions": next_actions,
+            "initialized": True,
+        }
+
     def upload(
         self,
         digest: str,
