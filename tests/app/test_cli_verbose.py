@@ -111,7 +111,7 @@ class VerboseCliTests(unittest.TestCase):
 
     def test_verbose_surfaces_root_causes_across_commands(self):
         # Test refresh command failure
-        with patch.object(
+        with patch.object(cli, "lexware_client", return_value=Mock()), patch.object(
             cli,
             "refresh_remote_inventory",
             side_effect=RuntimeError("Lexware request rate limited"),
