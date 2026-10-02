@@ -154,6 +154,15 @@ Befehle für noch nicht abgeschlossene Dokumente. Mit `--json` wird die Zusammen
 im maschinenlesbaren JSON-Format ausgegeben. Bei einem uninitialisierten Verzeichnis
 wird ohne Änderungen am Dateisystem ein leerer Status gemeldet.
 
+`doctor` prüft offline das Vorhandensein des nativen Anmeldedatenspeichers sowie
+der Anmeldedaten für Gmail und Lexware Office, ohne Netzwerkaufrufe auszuführen.
+Mit `--online` wird jeweils eine einzelne Identitätsabfrage (Gmail-Profil bzw.
+Lexware-Organisationsprofil) ausgeführt, um die Gültigkeit der Anmeldedaten
+sicherzustellen. Mit `--json` wird das Ergebnis strukturiert im JSON-Format
+ausgegeben. Ein nicht verfügbarer Speicher oder fehlgeschlagene Prüfungen führen
+zum Exit-Code 1; geheime Schlüssel oder Token werden dabei zu keinem Zeitpunkt
+ausgegeben.
+
 Bei Fehlern gibt BelegDock standardmäßig kurze, sichere Hinweise ohne geheime Daten oder Pfade aus. Mit `-v` / `--verbose` oder der Umgebungsvariable `BELEGDOCK_VERBOSE=1` wird auf stderr eine zusätzliche Zeile `Fehlerdetails: <Typ>: <Meldung>` ausgegeben, die den genauen Ausnahmegrund (z. B. fehlendes Gmail-Label, Lexware-Rate-Limit oder Authentifizierungsfehler) benennt, ohne geheime Token oder Tracebacks offenzulegen.
 
 Ein bestätigter Upload-Hash wird nicht erneut gesendet. Eine dokumentierte

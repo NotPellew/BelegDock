@@ -35,3 +35,21 @@ def load_secret(name: str) -> str:
     if not isinstance(value, str) or not value:
         raise RuntimeError("Connect the account first using its login command.")
     return value
+
+
+def check_credential_store() -> tuple[bool, str | None]:
+    try:
+        native_backend()
+        return True, None
+    except Exception:
+        return False, "Native OS credential store unavailable; no plaintext fallback."
+
+
+def has_secret(name: str) -> bool:
+    try:
+        backend = native_backend()
+        value = backend.get_password("BelegDock", name)
+        return isinstance(value, str) and bool(value.strip())
+    except Exception:
+        return False
+

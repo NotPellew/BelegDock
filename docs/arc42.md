@@ -79,6 +79,7 @@ These are module responsibilities, not separate services or a plugin system.
 7. Reconcile an uncertain result only through explicit remote file and voucher reads.
 8. Inspect local transfer and inventory state offline via `status` without making network requests or mutating stored state.
 9. Surface root-cause exception class and message on stderr via `--verbose` / `-v` or `BELEGDOCK_VERBOSE=1` without altering default output, exit codes, or leaking secrets/tracebacks.
+10. Diagnose credential store availability and stored credentials offline via `doctor`, or opt in to bounded, single-request live identity probes with `--online` without leaking secrets.
 
 Desktop operations run off the Tk event loop through one daemon worker thread and a
 queue drained by a `root.after` pump, so widgets are only touched on the event loop.
@@ -174,6 +175,11 @@ and host sockets are not. The session gets a temporary home and /tmp.
   CLI failures emit standard category guidance by default and append a single safe
   `Fehlerdetails: <Typ>: <Meldung>` line on stderr when `--verbose` or `BELEGDOCK_VERBOSE`
   is active, suppressing Python tracebacks and redacting stored credentials.
+- The `doctor` command validates credential store presence and service credentials
+  offline by default without executing network requests or reading secrets. When
+  `--online` is passed, it executes at most one read-only identity probe per service
+  (Gmail profile and Lexware profile), identifying authentication rejections without
+  exposing secrets in terminal or structured JSON output.
 - Use the OS credential store and fail explicitly when unavailable. No silent
   plaintext fallback. Keep credentials, message bodies, and document contents out
   of logs and test fixtures.
