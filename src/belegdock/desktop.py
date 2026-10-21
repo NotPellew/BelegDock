@@ -845,6 +845,9 @@ class DesktopApplication:
             ).grid(row=row, column=2, sticky="e", padx=(12, 0), pady=4)
         parent.columnconfigure(1, weight=1)
 
+    def _show_about(self) -> None:
+        raise NotImplementedError
+
     def run(self) -> None:
         self.root.mainloop()
 

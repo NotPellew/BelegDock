@@ -204,6 +204,20 @@ def build_manifest(
     }
 
 
+def embedded_revision(bundle: Path) -> str | None:
+    raise NotImplementedError
+
+
+def version_mismatches(
+    *,
+    package_version: str,
+    pyproject_version: str,
+    manifest: dict,
+    embedded_revision_value: str | None,
+) -> list[str]:
+    raise NotImplementedError
+
+
 def _read_text(path: Path) -> str | None:
     try:
         return path.read_text(encoding="utf-8", errors="ignore")
