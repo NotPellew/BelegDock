@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from . import doctor
 from .classification import CandidateClassification, lookup_candidate_classification
 from .service import refresh_remote_inventory
 from .workflow import (
@@ -149,6 +150,12 @@ def status_label(status_code: str) -> str:
 
 class DesktopUnavailableError(RuntimeError):
     pass
+
+
+class DesktopStartError(RuntimeError):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
 
 
 class DesktopService:
@@ -373,12 +380,14 @@ class DesktopApplication:
     _operation_progress_template: str | None = None
     _smoke_dump: Path | None = None
 
-    def __init__(self, service: DesktopService, tk: Any, ttk: Any, messagebox: Any):
+    def __init__(
+        self, service: DesktopService, tk: Any, ttk: Any, messagebox: Any, root: Any = None
+    ):
         self.service = service
         self.tk = tk
         self.ttk = ttk
         self.messagebox = messagebox
-        self.root = tk.Tk()
+        self.root = root if root is not None else tk.Tk()
         self.root.title(_("BelegDock"))
         self.label = tk.StringVar()
         self.notice = tk.StringVar(value=_("Wähle ein Gmail-Label."))
@@ -733,68 +742,7 @@ class DesktopApplication:
         self._layout_sections()
 
     def _configure_style(self) -> None:
-        colors = {
-            "background": "#fbfcff",
-            "surface": "#ffffff",
-            "foreground": "#07184d",
-            "muted": "#47618f",
-            "border": "#cbd8e8",
-            "accent": "#0757ff",
-            "selection": "#e8f1ff",
-            "action": "#edf6ff",
-        }
-        self.root.configure(background=colors["background"])
-        style = self.ttk.Style(self.root)
-        try:
-            style.theme_use("clam")
-        except self.tk.TclError:
-            pass
-        style.configure("Main.TFrame", background=colors["background"])
-        style.configure("Action.TFrame", background=colors["action"])
-        style.configure(
-            "AppTitle.TLabel",
-            background=colors["background"],
-            foreground=colors["foreground"],
-            font=("TkDefaultFont", 25, "bold"),
-        )
-        style.configure(
-            "SectionTitle.TLabel",
-            background=colors["background"],
-            foreground=colors["foreground"],
-            font=("TkDefaultFont", 20, "bold"),
-        )
-        style.configure(
-            "SubsectionTitle.TLabel",
-            background=colors["background"],
-            foreground=colors["foreground"],
-            font=("TkDefaultFont", 14, "bold"),
-        )
-        style.configure("Field.TLabel", background=colors["background"], foreground=colors["foreground"])
-        style.configure("Helper.TLabel", background=colors["background"], foreground=colors["muted"])
-        style.configure("Action.TLabel", background=colors["action"], foreground=colors["foreground"])
-        style.configure("Gmail.TCombobox", padding=7)
-        style.configure("Detail.TEntry", fieldbackground="#f4f7fb", foreground=colors["foreground"], padding=7)
-        style.configure(
-            "Documents.Treeview",
-            background=colors["surface"],
-            fieldbackground=colors["surface"],
-            foreground=colors["foreground"],
-            bordercolor=colors["border"],
-            rowheight=36,
-        )
-        style.configure(
-            "Documents.Treeview.Heading",
-            background="#f2f6fb",
-            foreground=colors["foreground"],
-            relief="flat",
-            font=("TkDefaultFont", 10, "bold"),
-        )
-        style.map(
-            "Documents.Treeview",
-            background=[("selected", colors["selection"])],
-            foreground=[("selected", colors["foreground"])],
-        )
-        style.configure("Primary.TButton", padding=(14, 8), foreground=colors["accent"])
+        configure_theme(self.root, self.tk, self.ttk)
 
     def _configure_window(self) -> None:
         self.root.geometry(INITIAL_WINDOW_GEOMETRY)
@@ -1215,10 +1163,88 @@ class DesktopApplication:
         self._maybe_close_after_completion()
 
 
+def configure_theme(root: Any, tk: Any, ttk: Any) -> None:
+    colors = {
+        "background": "#fbfcff",
+        "surface": "#ffffff",
+        "foreground": "#07184d",
+        "muted": "#47618f",
+        "border": "#cbd8e8",
+        "accent": "#0757ff",
+        "selection": "#e8f1ff",
+        "action": "#edf6ff",
+    }
+    root.configure(background=colors["background"])
+    style = ttk.Style(root)
+    try:
+        style.theme_use("clam")
+    except tk.TclError:
+        pass
+    style.configure("Main.TFrame", background=colors["background"])
+    style.configure("Action.TFrame", background=colors["action"])
+    style.configure(
+        "AppTitle.TLabel",
+        background=colors["background"],
+        foreground=colors["foreground"],
+        font=("TkDefaultFont", 25, "bold"),
+    )
+    style.configure(
+        "SectionTitle.TLabel",
+        background=colors["background"],
+        foreground=colors["foreground"],
+        font=("TkDefaultFont", 20, "bold"),
+    )
+    style.configure(
+        "SubsectionTitle.TLabel",
+        background=colors["background"],
+        foreground=colors["foreground"],
+        font=("TkDefaultFont", 14, "bold"),
+    )
+    style.configure("Field.TLabel", background=colors["background"], foreground=colors["foreground"])
+    style.configure("Helper.TLabel", background=colors["background"], foreground=colors["muted"])
+    style.configure("Action.TLabel", background=colors["action"], foreground=colors["foreground"])
+    style.configure("Gmail.TCombobox", padding=7)
+    style.configure("Detail.TEntry", fieldbackground="#f4f7fb", foreground=colors["foreground"], padding=7)
+    style.configure(
+        "Documents.Treeview",
+        background=colors["surface"],
+        fieldbackground=colors["surface"],
+        foreground=colors["foreground"],
+        bordercolor=colors["border"],
+        rowheight=36,
+    )
+    style.configure(
+        "Documents.Treeview.Heading",
+        background="#f2f6fb",
+        foreground=colors["foreground"],
+        relief="flat",
+        font=("TkDefaultFont", 10, "bold"),
+    )
+    style.map(
+        "Documents.Treeview",
+        background=[("selected", colors["selection"])],
+        foreground=[("selected", colors["foreground"])],
+    )
+    style.configure("Primary.TButton", padding=(14, 8), foreground=colors["accent"])
+
+
+def _run_setup(tk: Any, ttk: Any, filedialog: Any, state: Any) -> Any:
+    from . import desktop_setup
+
+    return desktop_setup.run_setup(tk, ttk, filedialog, state)
+
+
+def _is_rejection(error: Exception) -> bool:
+    try:
+        return bool(doctor.classify_gmail_error(error)["status"] == "rejected")
+    except Exception:
+        return False
+
+
 def run_desktop(data_dir: Path | None) -> None:
     try:
         import tkinter as tk
-        from tkinter import messagebox, ttk
+        from tkinter import filedialog, messagebox, ttk
     except ModuleNotFoundError as error:
         if error.name == "tkinter":
             raise DesktopUnavailableError(
@@ -1229,16 +1255,47 @@ def run_desktop(data_dir: Path | None) -> None:
             ) from error
         raise
     from . import cli
+    from . import setup as account_setup
 
     if os.environ.get(DESKTOP_SMOKE_ENV):
         from .desktop_smoke import run_desktop_smoke
 
         run_desktop_smoke(tk, ttk, messagebox)
         return
-    store = Store(data_dir or cli.default_data_dir())
-    account, gmail = cli.gmail_client()
-    remote = cli.lexware_client()
-    application = DesktopApplication(DesktopService(store, account, gmail, remote), tk, ttk, messagebox)
+    state = account_setup.detect_state()
+    route = account_setup.startup_route(state)
+    if route == "store_unavailable":
+        raise DesktopStartError(CREDENTIAL_STORE_UNAVAILABLE_MESSAGE)
+    root = None
+    gmail_reauthorized = route == "setup" and state.gmail != "present"
+    if route == "setup":
+        root = _run_setup(tk, ttk, filedialog, state)
+        if root is None:
+            return
+    try:
+        store = Store(data_dir or cli.default_data_dir())
+        try:
+            account, gmail = cli.gmail_client()
+        except Exception as error:
+            if gmail_reauthorized or not _is_rejection(error):
+                raise
+            if root is not None:
+                root.destroy()
+                root = None
+            lexware = "present" if route == "setup" else state.lexware
+            expired = account_setup.SetupState(state.store_available, "expired", lexware)
+            root = _run_setup(tk, ttk, filedialog, expired)
+            if root is None:
+                return
+            account, gmail = cli.gmail_client()
+        remote = cli.lexware_client()
+        application = DesktopApplication(
+            DesktopService(store, account, gmail, remote), tk, ttk, messagebox, root=root
+        )
+    except Exception:
+        if root is not None:
+            root.destroy()
+        raise
     try:
         application.run()
     finally:
@@ -1249,10 +1306,15 @@ DESKTOP_UNAVAILABLE_MESSAGE = _(
     "Desktop-Oberfläche ist nicht verfügbar; installiere Python-Tk-Unterstützung "
     "und starte „belegdock desktop“ erneut."
 )
+CREDENTIAL_STORE_UNAVAILABLE_MESSAGE = _(
+    "Der Anmeldedatenspeicher des Betriebssystems ist nicht verfügbar. BelegDock speichert "
+    "Zugangsdaten nie im Klartext. Unter Windows wird der Windows-Anmeldeinformationsspeicher "
+    "benötigt, unter Linux ein Secret-Service wie der GNOME-Schlüsselbund oder KWallet."
+)
 DESKTOP_START_FAILED_MESSAGE = _(
-    "BelegDock konnte nicht gestartet werden. Melde dich zuerst mit "
-    "„belegdock login-gmail“ und „belegdock login-lexware“ an und starte die "
-    "Anwendung erneut."
+    "BelegDock konnte nicht gestartet werden. Prüfe die Internetverbindung und starte die "
+    "Anwendung erneut. Besteht das Problem weiter, siehe die Hinweise zur Einrichtung "
+    "in der mitgelieferten Anleitung."
 )
 
 
@@ -1272,6 +1334,9 @@ def desktop_main(report: Callable[[str], None] | None = None) -> int:
         run_desktop(None)
     except DesktopUnavailableError:
         reporter(DESKTOP_UNAVAILABLE_MESSAGE)
+        return 1
+    except DesktopStartError as error:
+        reporter(error.message)
         return 1
     except Exception:
         reporter(DESKTOP_START_FAILED_MESSAGE)

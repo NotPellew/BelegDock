@@ -81,6 +81,18 @@ These are module responsibilities, not separate services or a plugin system.
 9. Surface root-cause exception class and message on stderr via `--verbose` / `-v` or `BELEGDOCK_VERBOSE=1` without altering default output, exit codes, or leaking secrets/tracebacks.
 10. Diagnose credential store availability and stored credentials offline via `doctor`, or opt in to bounded, single-request live identity probes with `--online` without leaking secrets.
 
+Desktop startup runs offline credential detection (`belegdock.setup`, built on
+`belegdock.doctor`). An unavailable store ends in a clear error without a window. If a
+credential is missing or unreadable, a mandatory setup screen (`belegdock.desktop_setup`)
+runs in the same Tk root before the main view; the Gmail/Lexware clients and the main
+view are created only afterwards. Setup workers only authorize (Gmail OAuth, bounded by
+a timeout, client JSON read from a user-chosen path and never stored) or validate (one
+Lexware profile probe); the Tk thread saves to the OS store only after checking that the
+attempt was not cancelled, so a cancelled or abandoned attempt can never persist
+credentials. A Gmail token rejected at client construction (expired or revoked) reopens setup once with
+the Gmail step marked expired; stored credentials are overwritten only after a successful
+reconnect. CLI `login-gmail` shares the widget-free OAuth code.
+
 Desktop operations run off the Tk event loop through one daemon worker thread and a
 queue drained by a `root.after` pump, so widgets are only touched on the event loop.
 Cancellation is cooperative and checked only at the two pre-POST upload boundaries

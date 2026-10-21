@@ -25,21 +25,57 @@ Installation
    belegdock gefunden wird.
 4. Der Startmenü-Eintrag "BelegDock" startet die Desktop-Oberfläche.
 
-Erste Anmeldung (einmalig, in einer neuen Eingabeaufforderung)
---------------------------------------------------------------
+Erste Einrichtung (einmalig, in BelegDock selbst)
+------------------------------------------------
+Beim ersten Start von "BelegDock" (Startmenü) erscheint ein Einrichtungsfenster. Ein
+Terminal ist nicht nötig. Das Fenster lässt sich nicht überspringen; Schließen beendet
+BelegDock.
+
+Schritt 1: Gmail verbinden
+  - Sie haben vom Herausgeber eine Datei mit der Endung .json erhalten (die
+    "OAuth-Client-Datei"). Sie enthält die Kennung der BelegDock-Testanwendung bei
+    Google. Speichern Sie sie irgendwo auf Ihrem Computer; BelegDock liest sie nur und
+    kopiert sie nicht.
+  - Der Herausgeber muss Ihre Gmail-Adresse vorab als "Testnutzer" eingetragen haben.
+    Ohne diesen Eintrag verweigert Google den Zugriff.
+  - Klicken Sie auf "OAuth-Client-Datei auswählen" und wählen Sie die Datei. Klicken
+    Sie dann auf "Mit Google verbinden". Es öffnet sich Ihr Browser.
+  - Weil die Anwendung bei Google im Testmodus läuft, erscheint die Warnung "Diese App
+    wurde nicht von Google überprüft". Das ist erwartet. Klicken Sie auf „Weiter“
+    (gegebenenfalls zuerst auf „Erweitert“) und erlauben Sie den Lesezugriff auf Gmail.
+    BelegDock liest nur; es verändert, löscht oder sendet keine E-Mails.
+  - Zeigt Google stattdessen "Zugriff blockiert", hat der Herausgeber Ihre Gmail-Adresse
+    noch nicht als Testnutzer eingetragen. Bitten Sie ihn darum.
+  - Im Testmodus läuft die Google-Anmeldung nach etwa 7 Tagen ab. Dann zeigt BelegDock
+    beim Start die Einrichtung mit dem Hinweis "Gmail-Anmeldung abgelaufen"; wählen Sie
+    die Datei erneut und klicken Sie auf "Mit Google verbinden".
+  - Kehren Sie zu BelegDock zurück. Bei Erfolg steht dort "Verbunden als ...".
+  - Mit "Abbrechen" können Sie jederzeit neu beginnen. Dauert die Anmeldung im Browser
+    zu lange (etwa 3 Minuten), erscheint ein Hinweis und Sie versuchen es erneut.
+
+Schritt 2: Lexware verbinden
+  - Erzeugen Sie in Lexware Office einen API-Schlüssel unter
+    https://app.lexware.de/addons/public-api (Link im Fenster anklickbar).
+  - Fügen Sie den Schlüssel in das Feld "API-Schlüssel" ein (die Eingabe ist verdeckt)
+    und klicken Sie auf "Prüfen und speichern". BelegDock prüft den Schlüssel mit einer
+    einzigen Abfrage und speichert ihn nur, wenn Lexware ihn akzeptiert. Bei
+    "Schlüssel abgelehnt" erzeugen Sie bei Bedarf einen neuen Schlüssel.
+
+Wenn beide Schritte "Verbunden" zeigen, klicken Sie auf "Weiter". Die Anmeldedaten
+liegen ausschließlich im Windows Credential Manager. Es gibt keinen Klartext-Fallback.
+Beim nächsten Start öffnet BelegDock direkt die Hauptansicht.
+
+Alternative für Fortgeschrittene (neue Eingabeaufforderung):
   belegdock login-gmail --client C:\Pfad\zum\client.json
   belegdock login-lexware
-
-Anmeldedaten liegen ausschließlich im Windows Credential Manager. Es gibt keinen
-Klartext-Fallback.
 
 Starten
 -------
 Über das Startmenü "BelegDock" oder mit:
   belegdock desktop
 
-Ohne vorherige Anmeldung erscheint eine deutsche Fehlermeldung statt eines
-Fensters.
+Ist der Windows Credential Manager nicht verfügbar, zeigt BelegDock eine
+Fehlermeldung statt eines Fensters.
 
 Daten
 -----

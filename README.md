@@ -56,6 +56,9 @@ außerhalb des Repositorys.
    verdeckten Eingabe eingeben. Das Speichern eines Schlüssels bestätigt nicht,
    dass Lexware ihn akzeptiert.
 
+Die Desktop-Oberfläche kann beide Verbindungen auch ohne Terminal herstellen
+(erster Start, siehe unten); die beiden Befehle bleiben als Alternative bestehen.
+
 Anmeldedaten werden unter Windows im Credential Manager und unter Linux im Secret
 Service gespeichert.
 Ein nicht verfügbarer Speicher ist ein Fehler; es gibt keinen stillen Fallback auf
@@ -91,6 +94,26 @@ Absender werden nur während des Scans für feste Signaltexte ausgewertet, nicht
 SQLite gespeichert und nicht ausgegeben.
 
 Für die lokale Desktop-Ansicht desselben Ablaufs `belegdock desktop` ausführen.
+Beim ersten Start oder wenn ein Anmeldedatum fehlt oder nicht lesbar ist, erscheint
+vor der Hauptansicht die Einrichtung (Pflicht; Schließen beendet BelegDock). Schritt 1:
+„OAuth-Client-Datei auswählen…“ wählt die vom Herausgeber erhaltene JSON-Datei (nur
+gelesen, nicht kopiert, nur der Dateiname wird angezeigt); „Mit Google verbinden“
+öffnet den Browser und speichert erst nach erfolgreicher Profilabfrage; „Abbrechen“
+kehrt sofort zum erneuten Versuch zurück und verwirft ein spätes Ergebnis.
+Verweigerung, Zeitüberschreitung, Netzwerk- und Dateifehler haben eigene Hinweise
+(Verweigerung: die Gmail-Adresse muss als Testnutzer eingetragen sein). Schritt 2:
+Der Lexware-Schlüssel wird verdeckt eingegeben; „Prüfen und speichern“ führt genau
+eine Profilabfrage aus und speichert den Schlüssel nur bei Erfolg im
+Anmeldedatenspeicher. Gespeicherte Anmeldedaten gelten als verbunden und müssen nicht
+erneut eingegeben werden; „Weiter“ öffnet die Hauptansicht, sobald beide verbunden
+sind. Im Google-Testmodus laufen Anmeldungen nach etwa 7 Tagen ab: Lehnt Google das
+gespeicherte Token beim Start ab, öffnet BelegDock die Einrichtung mit dem
+markierten Schritt „Gmail-Anmeldung abgelaufen“ (Lexware bleibt verbunden); das
+gespeicherte Token wird erst bei erfolgreicher Neuverbindung überschrieben. Ein
+Fenster, das höher als der Bildschirm wäre, scrollt; „Abbrechen“ und „Weiter“
+bleiben sichtbar. Ist der Anmeldedatenspeicher nicht verfügbar, zeigt BelegDock eine Fehlermeldung
+und kein Fenster. Die Einrichtung sendet nichts an Lexware und wiederholt nichts
+automatisch.
 Ein Gmail-Label auswählen, Anhänge nach Dateiname, Dokumenttyp, Empfehlung und
 Größe markieren und „Ausgewählte Dokumente vorbereiten“ wählen. Die Empfehlung
 ist nur eine Sortierhilfe. Das Vorbereiten speichert die ausgewählten Dateien
@@ -215,14 +238,17 @@ Umgebung sind nicht nötig.
    Benutzer-PATH ein und legt einen Startmenü-Eintrag „BelegDock“ an. Eine
    Administratorabfrage entfällt; Windows SmartScreen warnt, weil das Paket
    nicht signiert ist.
-3. In einer neuen Eingabeaufforderung einmalig anmelden:
+3. Über das Startmenü „BelegDock“ starten: Beim ersten Start führt die Einrichtung
+   in der Anwendung durch Gmail (OAuth-Client-Datei vom Herausgeber, Browser-Anmeldung)
+   und Lexware (API-Schlüssel); ein Terminal ist nicht nötig. Alternativ in einer neuen
+   Eingabeaufforderung anmelden:
 
 ```sh
 belegdock login-gmail --client C:\Pfad\zum\client.json
 belegdock login-lexware
 ```
 
-4. Über das Startmenü „BelegDock“ oder mit `belegdock desktop` starten.
+4. Danach öffnet BelegDock direkt die Hauptansicht (Startmenü oder `belegdock desktop`).
 
 Daten liegen unter `%LOCALAPPDATA%\BelegDock` mit `state.sqlite3` und `blobs/`
 außerhalb der Installation; sie bleiben bei einem Upgrade und bei der
