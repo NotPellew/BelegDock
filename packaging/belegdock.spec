@@ -13,7 +13,6 @@ HIDDEN_IMPORTS = [
     "belegdock.setup",
     "google_auth_oauthlib.flow",
     "google.auth.exceptions",
-    "httplib2",
     "google.auth.transport.requests",
     "google.oauth2.credentials",
     "googleapiclient.discovery",
