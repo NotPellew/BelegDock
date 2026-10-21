@@ -175,11 +175,17 @@ and host sockets are not. The session gets a temporary home and /tmp.
   CLI failures emit standard category guidance by default and append a single safe
   `Fehlerdetails: <Typ>: <Meldung>` line on stderr when `--verbose` or `BELEGDOCK_VERBOSE`
   is active, suppressing Python tracebacks and redacting stored credentials.
-- The `doctor` command validates credential store presence and service credentials
-  offline by default without executing network requests or reading secrets. When
-  `--online` is passed, it executes at most one read-only identity probe per service
-  (Gmail profile and Lexware profile), identifying authentication rejections without
-  exposing secrets in terminal or structured JSON output.
+- The `doctor` command checks credential store availability and per-secret state
+  (`present`, `missing`, `read_failed`, `store_unavailable`) offline without network
+  requests. It reads the stored values to test presence but never prints or serializes
+  them. With `--online` it executes at most one read-only identity probe per service
+  (Gmail profile, Lexware profile) and reports `ok`, `rejected`, `error`, or `skipped`.
+  Rejection is classified by exception type, not message text: Google `RefreshError`,
+  HTTP 401, Gmail HTTP 403 with an auth reason, and Lexware `RemoteAuthError`;
+  transport, quota, and other failures are `error`. The Gmail probe may refresh an
+  expired token in memory but never writes the credential store. Detection lives in
+  `belegdock.doctor` (widget-free, stable codes, reusable by the desktop); German text
+  is produced only by its human formatter.
 - Use the OS credential store and fail explicitly when unavailable. No silent
   plaintext fallback. Keep credentials, message bodies, and document contents out
   of logs and test fixtures.

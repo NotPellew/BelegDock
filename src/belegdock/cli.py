@@ -9,12 +9,12 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, NoReturn
 
-from . import __version__, accounts
+from . import __version__, accounts, doctor
 from .classification import classify_candidate_mapping
 from .integrations import GmailAdapter, LexwareAdapter
 from .desktop import DesktopUnavailableError, run_desktop
 from .service import refresh_remote_inventory as _refresh_remote_inventory
-from .workflow import DocumentRejected, LocalIntegrityError, RemoteAuthError, Store, TransferActiveError
+from .workflow import DocumentRejected, LocalIntegrityError, RemoteAuthError, Store, TransferActiveError  # noqa: F401
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 LOCAL_INTEGRITY_FAILED = "local_integrity_failed"
@@ -26,6 +26,7 @@ QUICK_START = """Schnellstart:
   belegdock stage --label LABEL --select MESSAGE_ID:PART_ID
   belegdock documents
   belegdock status
+  belegdock doctor [--online]  (Verbindung nur mit --online geprüft)
   belegdock refresh
   belegdock upload SHA256_HASH
 
@@ -82,14 +83,15 @@ def connect_gmail(client_path: Path) -> str:
     return account
 
 
-def gmail_client() -> tuple[str, GmailAdapter]:
+def gmail_client(*, persist: bool = True) -> tuple[str, GmailAdapter]:
     info = json.loads(accounts.load_secret("gmail"))
     credentials = import_module("google.oauth2.credentials").Credentials.from_authorized_user_info(
         info, SCOPES
     )
     if not credentials.valid:
         credentials.refresh(import_module("google.auth.transport.requests").Request())
-        accounts.save_secret("gmail", credentials.to_json())
+        if persist:
+            accounts.save_secret("gmail", credentials.to_json())
     service = build_gmail(credentials)
     account = str(service.users().getProfile(userId="me").execute()["emailAddress"])
     return account, GmailAdapter(service)
@@ -303,169 +305,15 @@ def format_verbose_exception(error: BaseException) -> str:
 
 
 def run_doctor(*, online: bool = False) -> dict[str, Any]:
-    store_available, store_error = accounts.check_credential_store()
-    if not store_available:
-        return {
-            "ok": False,
-            "store": {"available": False, "error": store_error},
-            "credentials": {
-                "gmail": {"present": False},
-                "lexware": {"present": False},
-            },
-            "online": (
-                {
-                    "gmail": {"status": "skipped", "error": "Anmeldedatenspeicher nicht verfügbar"},
-                    "lexware": {"status": "skipped", "error": "Anmeldedatenspeicher nicht verfügbar"},
-                }
-                if online
-                else None
-            ),
-        }
-
-    gmail_present = accounts.has_secret("gmail")
-    lexware_present = accounts.has_secret("lexware")
-    ok = gmail_present and lexware_present
-
-    result: dict[str, Any] = {
-        "ok": ok,
-        "store": {"available": True, "error": None},
-        "credentials": {
-            "gmail": {"present": gmail_present},
-            "lexware": {"present": lexware_present},
-        },
-        "online": None,
-    }
-
-    if not online:
-        return result
-
-    online_results: dict[str, Any] = {}
-
-    if not gmail_present:
-        online_results["gmail"] = {"status": "skipped", "error": "Anmeldedaten fehlen"}
-        ok = False
-    else:
-        try:
-            account, _ = gmail_client()
-            online_results["gmail"] = {"status": "ok", "account": account}
-        except RemoteAuthError as error:
-            online_results["gmail"] = {
-                "status": "rejected",
-                "error": f"Anmeldedaten abgelehnt (HTTP {error.status_code})",
-            }
-            ok = False
-        except Exception as error:
-            err_msg = str(error)
-            status_code = getattr(getattr(error, "resp", None), "status", None)
-            if status_code in (401, 403) or any(k in err_msg.lower() for k in ("invalid_grant", "unauthorized", "auth", "401", "403")):
-                online_results["gmail"] = {
-                    "status": "rejected",
-                    "error": f"Anmeldedaten abgelehnt ({type(error).__name__})",
-                }
-            else:
-                online_results["gmail"] = {
-                    "status": "error",
-                    "error": f"Verbindungsfehler ({type(error).__name__})",
-                }
-            ok = False
-
-    if not lexware_present:
-        online_results["lexware"] = {"status": "skipped", "error": "Anmeldedaten fehlen"}
-        ok = False
-    else:
-        remote = None
-        try:
-            remote = lexware_client()
-            probe_fn = getattr(remote, "probe_profile", None)
-            if callable(probe_fn):
-                profile = probe_fn()
-            else:
-                profile = {"organizationId": "unbekannt"}
-            org_id = profile.get("organizationId")
-            online_results["lexware"] = {"status": "ok", "organizationId": org_id}
-        except RemoteAuthError as error:
-            online_results["lexware"] = {
-                "status": "rejected",
-                "error": f"Anmeldedaten abgelehnt (HTTP {error.status_code})",
-            }
-            ok = False
-        except Exception as error:
-            err_msg = str(error)
-            status_code = getattr(getattr(error, "response", None), "status_code", None)
-            if status_code in (401, 403) or any(k in err_msg.lower() for k in ("unauthorized", "forbidden", "401", "403")):
-                code_str = f"HTTP {status_code}" if status_code else type(error).__name__
-                online_results["lexware"] = {
-                    "status": "rejected",
-                    "error": f"Anmeldedaten abgelehnt ({code_str})",
-                }
-            else:
-                online_results["lexware"] = {
-                    "status": "error",
-                    "error": f"Verbindungsfehler ({type(error).__name__})",
-                }
-            ok = False
-        finally:
-            if remote is not None:
-                client = getattr(remote, "client", None)
-                close = getattr(client, "close", None)
-                if callable(close):
-                    close()
-
-    result["online"] = online_results
-    result["ok"] = (
-        ok
-        and online_results.get("gmail", {}).get("status") == "ok"
-        and online_results.get("lexware", {}).get("status") == "ok"
+    return doctor.detect(
+        online=online,
+        gmail_account=lambda: gmail_client(persist=False)[0],
+        lexware_remote=lambda: lexware_client(),
     )
-    return result
 
 
 def format_doctor_human(result: dict[str, Any]) -> str:
-    lines = ["BelegDock-Diagnose:"]
-    store = result.get("store", {})
-    if store.get("available"):
-        lines.append("  Anmeldedatenspeicher: Verfügbar")
-    else:
-        err = store.get("error") or "Nicht verfügbar"
-        lines.append(f"  Anmeldedatenspeicher: Nicht verfügbar ({err})")
-
-    creds = result.get("credentials", {})
-    gmail_present = creds.get("gmail", {}).get("present", False)
-    lexware_present = creds.get("lexware", {}).get("present", False)
-    if not store.get("available"):
-        lines.append("  Gmail-Anmeldedaten: Nicht verfügbar")
-        lines.append("  Lexware-Anmeldedaten: Nicht verfügbar")
-    else:
-        lines.append(f"  Gmail-Anmeldedaten: {'Gespeichert' if gmail_present else 'Nicht gespeichert'}")
-        lines.append(f"  Lexware-Anmeldedaten: {'Gespeichert' if lexware_present else 'Nicht gespeichert'}")
-
-    online = result.get("online")
-    if online is not None:
-        gmail_online = online.get("gmail", {})
-        g_status = gmail_online.get("status")
-        if g_status == "ok":
-            account = gmail_online.get("account", "")
-            lines.append(f"  Gmail-Verbindung: Erfolgreich (verbunden als {account})")
-        elif g_status == "rejected":
-            lines.append("  Gmail-Verbindung: Abgelehnt (Authentifizierung fehlgeschlagen)")
-        elif g_status == "skipped":
-            lines.append("  Gmail-Verbindung: Übersprungen (keine Anmeldedaten)")
-        else:
-            lines.append(f"  Gmail-Verbindung: Fehlgeschlagen ({gmail_online.get('error', 'Fehler')})")
-
-        lexware_online = online.get("lexware", {})
-        l_status = lexware_online.get("status")
-        if l_status == "ok":
-            org_id = lexware_online.get("organizationId", "")
-            lines.append(f"  Lexware-Verbindung: Erfolgreich (Organisation: {org_id})")
-        elif l_status == "rejected":
-            lines.append("  Lexware-Verbindung: Abgelehnt (Authentifizierung fehlgeschlagen)")
-        elif l_status == "skipped":
-            lines.append("  Lexware-Verbindung: Übersprungen (keine Anmeldedaten)")
-        else:
-            lines.append(f"  Lexware-Verbindung: Fehlgeschlagen ({lexware_online.get('error', 'Fehler')})")
-
-    return "\n".join(lines)
+    return doctor.format_human(result)
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -532,11 +380,16 @@ def make_parser() -> argparse.ArgumentParser:
     add_command("documents", help="Lokale Dokumente und Übertragungsstatus auflisten")
     status_cmd = add_command("status", help="Lokalen Übertragungsstatus und nächste Schritte zusammenfassen")
     status_cmd.add_argument("--json", action="store_true", help="Ausgabe im JSON-Format erzeugen")
-    doctor_cmd = add_command("doctor", help="Anmeldedatenspeicher und Verbindung zu den Diensten prüfen")
+    doctor_cmd = add_command(
+        "doctor",
+        help="Anmeldedaten offline prüfen; Verbindung nur mit --online",
+        description="Anmeldedatenspeicher und gespeicherte Anmeldedaten offline prüfen. "
+        "Die Verbindung zu Gmail und Lexware wird nur mit --online geprüft.",
+    )
     doctor_cmd.add_argument(
         "--online",
         action="store_true",
-        help="Verbindung zu Gmail und Lexware über Identitätsabfragen prüfen",
+        help="Je eine Identitätsabfrage an Gmail und Lexware senden; Gmail kann ein Token dafür nur im Speicher erneuern",
     )
     doctor_cmd.add_argument("--json", action="store_true", help="Ausgabe im JSON-Format erzeugen")
     add_command("desktop", help="Lokale Desktop-Oberfläche für die Dokumentübertragung öffnen")
