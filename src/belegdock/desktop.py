@@ -1267,6 +1267,7 @@ def run_desktop(data_dir: Path | None) -> None:
     if route == "store_unavailable":
         raise DesktopStartError(CREDENTIAL_STORE_UNAVAILABLE_MESSAGE)
     root = None
+    gmail_reauthorized = route == "setup" and state.gmail != "present"
     if route == "setup":
         root = _run_setup(tk, ttk, filedialog, state)
         if root is None:
@@ -1276,9 +1277,13 @@ def run_desktop(data_dir: Path | None) -> None:
         try:
             account, gmail = cli.gmail_client()
         except Exception as error:
-            if root is not None or not _is_rejection(error):
+            if gmail_reauthorized or not _is_rejection(error):
                 raise
-            expired = account_setup.SetupState(state.store_available, "expired", state.lexware)
+            if root is not None:
+                root.destroy()
+                root = None
+            lexware = "present" if route == "setup" else state.lexware
+            expired = account_setup.SetupState(state.store_available, "expired", lexware)
             root = _run_setup(tk, ttk, filedialog, expired)
             if root is None:
                 return

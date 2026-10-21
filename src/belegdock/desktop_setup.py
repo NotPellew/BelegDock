@@ -21,7 +21,7 @@ from .setup import (
 LEXWARE_KEY_URL = "https://app.lexware.de/addons/public-api"
 SETUP_START_WIDTH = 760
 SETUP_MIN_SIZE = (480, 360)
-SCREEN_MARGIN = 96
+SCREEN_MARGIN = 160
 SETUP_PROBE_ENV = "BELEGDOCK_SETUP_PROBE_DUMP"
 CANVAS_BACKGROUND = "#fbfcff"
 MIN_WRAP = 240
@@ -440,7 +440,7 @@ class SetupView:
             return
         path = self._client_path
         if path is None:
-            self.gmail_state = StepState("error", "no_client_file")
+            self.gmail_state = _input_error(self.gmail_state, "no_client_file")
             self._refresh()
             return
         attempt = self._begin("gmail")
@@ -471,7 +471,7 @@ class SetupView:
             return
         key = str(self.lexware_key.get()).strip()
         if not key:
-            self.lexware_state = StepState("error", "invalid_key")
+            self.lexware_state = _input_error(self.lexware_state, "invalid_key")
             self._refresh()
             return
         attempt = self._begin("lexware")
@@ -526,6 +526,12 @@ class SetupView:
         self._attempt += 1
         self._release_bindings()
         self.on_close()
+
+
+def _input_error(current: StepState, code: str) -> StepState:
+    if current.status == "connected":
+        return StepState("connected", code, current.account)
+    return StepState("error", code)
 
 
 def fit_height(needed: int, screen_height: int) -> int:
