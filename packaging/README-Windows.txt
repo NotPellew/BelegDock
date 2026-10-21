@@ -12,13 +12,16 @@ Lexware-Office-API-Schlüssel. Python oder uv sind für die fertige Installation
 nicht erforderlich. Die Setup-Datei stammt von der GitHub-Releases-Seite
 (https://github.com/NotPellew/BelegDock/releases). Optional vorab: die
 SHA-256-Prüfsumme der Setup-Datei mit dem Eintrag in SHA256SUMS.txt desselben
-Release vergleichen.
+Release vergleichen. Bei signierten Releases zusätzlich die Signatur prüfen (siehe
+"Signatur prüfen").
 
 Installation
 ------------
 1. BelegDock-<Version>-windows-x64-setup.exe starten.
-2. Die Windows-SmartScreen-Warnung erscheint, weil das Paket nicht signiert ist.
-   Über "Weitere Informationen" und "Trotzdem ausführen" fortfahren.
+2. Windows SmartScreen kann eine Warnung zeigen: bei unsignierten Releases und auch
+   bei signierten, solange die Datei noch keine Reputation hat. Dann die Signatur
+   prüfen (siehe "Signatur prüfen") und über "Weitere Informationen" und
+   "Trotzdem ausführen" fortfahren.
 3. Der deutsche Assistent installiert nach
    %LOCALAPPDATA%\Programs\BelegDock und trägt dieses Verzeichnis in den
    Benutzer-PATH ein. Ein Neustart der Eingabeaufforderung ist nötig, damit
@@ -69,6 +72,21 @@ Alternative für Fortgeschrittene (neue Eingabeaufforderung):
   belegdock login-gmail --client C:\Pfad\zum\client.json
   belegdock login-lexware
 
+Signatur prüfen
+---------------
+Signierte Releases tragen eine Authenticode-Signatur der SignPath Foundation (kostenlose
+Codesignatur durch SignPath.io). Releases ohne Signatur erkennen Sie daran, dass
+artifact.json im Release kein Feld "signature" enthält.
+  - Explorer: Rechtsklick auf die Setup-Datei, "Eigenschaften", Reiter "Digitale
+    Signaturen". Die Signatur muss gültig sein und "SignPath Foundation" nennen.
+  - PowerShell:
+      Get-AuthenticodeSignature .\BelegDock-<Version>-windows-x64-setup.exe | Format-List
+    "Status" muss "Valid" sein, der Signaturgeber "SignPath Foundation" enthalten und
+    ein Zeitstempel vorhanden sein.
+Eine gültige Signatur ist nicht dasselbe wie SmartScreen-Reputation: Auch ein
+signiertes neues Release kann noch gewarnt werden. Das ist kein Zeichen für eine
+ungültige Signatur. Details: Abschnitt "Code signing policy" im Projekt-README.
+
 Starten
 -------
 Über das Startmenü "BelegDock" oder mit:
@@ -109,6 +127,8 @@ Ein unklares Sendeergebnis wird nie automatisch erneut gesendet.
 
 Grenzen
 -------
-Keine Code-Signatur, daher SmartScreen-Warnung. Kein eigenes Anwendungssymbol.
+Nur die Setup-Datei wird signiert, nicht die darin enthaltenen Programmdateien;
+Releases vor der SignPath-Freigabe sind unsigniert und lösen die SmartScreen-Warnung
+aus. Kein eigenes Anwendungssymbol.
 Live-Übertragungen mit Gmail und Lexware sind nicht Teil dieser Paketprüfung und
 benötigen eine eigene Freigabe.

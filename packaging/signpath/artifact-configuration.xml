@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="BelegDock-*-windows-x64-setup.exe" product-name="BelegDock">
+      <authenticode-sign description="BelegDock" description-url="https://github.com/NotPellew/BelegDock" />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

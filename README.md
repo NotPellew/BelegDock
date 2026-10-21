@@ -237,12 +237,14 @@ Umgebung sind nicht nötig.
    nicht nötig) und die SHA-256-Prüfsumme mit dem Eintrag in
    `SHA256SUMS.txt` desselben Release vergleichen, zum Beispiel mit
    `Get-FileHash` in PowerShell. Alpha-Versionen wie `0.1.0a1` sind dort
-   als Pre-Release gekennzeichnet.
+   als Pre-Release gekennzeichnet. Ob und von wem das Release signiert ist, steht in
+   [Codesignatur](#code-signing-policy).
 2. Die Setup-Datei starten. Der deutsche Assistent installiert nach
    `%LOCALAPPDATA%\Programs\BelegDock`, trägt das Verzeichnis in den
    Benutzer-PATH ein und legt einen Startmenü-Eintrag „BelegDock“ an. Eine
-   Administratorabfrage entfällt; Windows SmartScreen warnt, weil das Paket
-   nicht signiert ist.
+   Administratorabfrage entfällt. Windows SmartScreen kann trotzdem warnen: bei
+   unsignierten Releases, aber auch bei signierten, solange die Datei noch keine
+   Reputation hat (siehe [Codesignatur](#code-signing-policy)).
 3. Über das Startmenü „BelegDock“ starten: Beim ersten Start führt die Einrichtung
    in der Anwendung durch Gmail (OAuth-Client-Datei vom Herausgeber, Browser-Anmeldung)
    und Lexware (API-Schlüssel); ein Terminal ist nicht nötig. Alternativ in einer neuen
@@ -266,12 +268,54 @@ dieses Verzeichnis bewusst selbst löschen.
 
 Unterstützt sind Windows 10 22H2 (10.0.19045) und Windows 11, nur x64; ARM64 und
 ältere Windows-Versionen lehnt der Installer ab. Die Anleitung für den Pilot liegt
-dem Paket als `README-Windows.txt` bei. Das Paket ist nicht signiert. Die Offline-Paketprüfung testet weder
+dem Paket als `README-Windows.txt` bei. Die Offline-Paketprüfung testet weder
 Gmail- noch Lexware-Konnektivität; ein separater Windows-Test des gebauten
 Python-Pakets bestand mit Windows Credential Manager, dem Live-Scannen und
 Vorbereiten in Gmail sowie dem Senden und der Ablehnungsbehandlung in Lexware.
 Dieser gefrorene Installer wurde noch nicht live gegen Gmail und Lexware geprüft;
 dafür ist ein eigener Pilotlauf mit Testkonto und Testdaten nötig.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org)
+
+**Stand:** Die Signierung ist im Release-Workflow vorbereitet, aber erst wirksam, wenn
+der Herausgeber die SignPath-Foundation-Freigabe erhalten und das Repository
+konfiguriert hat ([Einrichtung](docs/issue-39-implementation-plan.md)). Bis dahin sind
+Releases unsigniert, und `artifact.json` enthält kein Feld `signature`. Ist die
+Signierung konfiguriert, ist sie zwingend: Schlägt Signierung oder Prüfung fehl, wird
+nichts veröffentlicht.
+
+- **Was signiert wird:** nur die Setup-Datei `BelegDock-<Version>-windows-x64-setup.exe`.
+  Die darin enthaltenen Programmdateien sind nicht einzeln signiert (offene Folgearbeit).
+- **Herkunft:** Signierte Artefakte entstehen ausschließlich aus diesem Repository
+  durch GitHub Actions (`.github/workflows/release.yml`) auf GitHub-gehosteten Runnern.
+  Jede Signieranfrage genehmigt der Herausgeber manuell in SignPath.
+- **Rollen:** Committer und Reviewer sowie Genehmiger (Approver) ist der
+  Repository-Inhaber [NotPellew](https://github.com/NotPellew).
+- **Datenschutz:** BelegDock überträgt Daten nur an Gmail (nur Lesezugriff) und an
+  Lexware Office, und nur dann, wenn Sie diese Aktion starten. Es gibt keine weitere
+  Übertragung.
+
+**Signatur prüfen.** Im Explorer: Rechtsklick auf die Setup-Datei, „Eigenschaften“,
+Reiter „Digitale Signaturen“; der Signaturstatus muss „Diese digitale Signatur ist
+gültig“ melden und den Signaturgeber „SignPath Foundation“ nennen. In PowerShell:
+
+```powershell
+Get-AuthenticodeSignature .\BelegDock-<Version>-windows-x64-setup.exe |
+    Format-List Status, SignerCertificate, TimeStamperCertificate
+```
+
+`Status` muss `Valid` sein, der Signaturgeber `SignPath Foundation` enthalten und ein
+Zeitstempel vorhanden sein. Signaturgeber, Fingerabdruck und die SHA-256-Prüfsumme der
+unsignierten Datei stehen zusätzlich im Feld `signature` von `artifact.json`.
+
+**SmartScreen.** Eine gültige Signatur nennt den Herausgeber, ist aber nicht dasselbe
+wie SmartScreen-Reputation. Neue Versionen können weiterhin die Warnung „Der Computer
+wurde durch Windows geschützt“ auslösen, bis die Datei genug Reputation aufgebaut hat.
+Prüfen Sie dann die Signatur wie oben und fahren Sie über „Weitere Informationen“ und
+„Trotzdem ausführen“ fort.
 
 ## Windows-Test-Fixtures und Gmail-Pilotversand
 
@@ -339,6 +383,7 @@ ein erneuter Live-Nachweis erforderlich sind.
 
 - [AGENTS.md](AGENTS.md): Arbeitsablauf, Tests, Entwicklungsbefehle und Isolation.
 - [Architektur](docs/arc42.md): Geltungsbereich, Entscheidungen, Grenzen und offene Arbeit.
+- [Signierung einrichten (Issue #39)](docs/issue-39-implementation-plan.md): Checkliste für den Herausgeber (SignPath Foundation).
 - [Issue-Automatisierung](.github/implementation-worker.md): Freigabe, Einrichtung und Grenzen des GitHub-Implementierungsworkers.
 - [Feature-Formular](https://github.com/NotPellew/BelegDock/issues/new?template=feature.yml):
   Arbeit in einem Issue präzisieren; die Liefernachweise bleiben im zugehörigen PR.

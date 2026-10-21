@@ -146,7 +146,11 @@ versions and git revision, plus the frozen bundle) as a 90-day workflow artifact
 On a `v*` tag (or manual dispatch naming an existing tag) the release workflow
 reuses the same build, artifact check and smoke install, then publishes the setup
 executable, wheel, sdist, `artifact.json` and `SHA256SUMS.txt` as a GitHub Release
-(prerelease for PEP 440 pre/dev versions); there is no code signing. The installer smoke step launches
+(prerelease for PEP 440 pre/dev versions). When the Actions variable
+`SIGNPATH_ORGANIZATION_ID` is set, a `sign` job submits the setup executable to
+SignPath, verifies the Authenticode signature (Valid, expected signer, timestamp) on
+Windows and publishes the signed set with a `signature` object in `artifact.json`;
+any failure stops publication. Otherwise the release stays unsigned. The installer smoke step launches
 the frozen desktop executable with `BELEGDOCK_DESKTOP_SMOKE=1`: the hook skips
 credential loading, wires deterministic fake Gmail/Lexware services over a temporary
 `Store`, drives a scripted self-test, appends JSON state lines to a dump, and the
@@ -244,6 +248,7 @@ and host sockets are not. The session gets a temporary home and /tmp.
 | GitHub issues and PRs | One feature specification and linked delivery evidence | Hosting requirements change |
 | Bubblewrap for the initial Linux boundary | Small launcher using OS mounts; no new service | Windows implementation or runtime compatibility requires another backend |
 | Issue and implementation plan | The issue body records user-facing scope and acceptance; a linked repository-local plan records technical implementation details | The planning or handoff workflow no longer preserves this separation |
+| SignPath Foundation certificate via SignPath.io, signing only the outer setup executable, fail-closed when configured | Free for open source; protected CI signing without certificate files; Inno Setup executables cannot be deep-signed by SignPath | Approval is refused or revoked, inner executables must be signed, or SmartScreen reputation requires another certificate |
 | PyInstaller onedir plus per-user Inno Setup for the Windows pilot | Installs without admin or a source checkout; install path stays independent from user data | Runner/toolchain drift or a signing requirement appears |
 
 ## 10. Quality requirements
@@ -323,7 +328,9 @@ and host sockets are not. The session gets a temporary home and /tmp.
   API/key usage terms for this application, including whether users may generate
   and store their own key in a local open-source client that never receives it
   (Apache-2.0 is selected).
-- The Windows pilot installer is unsigned (SmartScreen warning) and PyInstaller may embed build-machine source paths, so the
+- The Windows pilot installer is unsigned until SignPath Foundation approves the project
+  (README "Code signing policy"; inner executables stay unsigned). PyInstaller may embed
+  build-machine source paths, so the
   build uses the neutral work root `C:\belegdock-build` and the artifact check
   scans for user-profile patterns; that reduces but does not prove the absence of
   embedded paths. The artifact check verifies the Tcl/Tk data directories

@@ -165,7 +165,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         text = read_workflow()
         self.assertEqual(text.count("contents: write"), 1)
         self.assertIn("contents: read", text)
-        self.assertIn("needs: build", text)
+        self.assertIn("needs: [build, sign]", text)
         self.assertIn("gh release create", text)
         self.assertIn("--prerelease", text)
         self.assertIn("--verify-tag", text)
