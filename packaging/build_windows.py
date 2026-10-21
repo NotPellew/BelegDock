@@ -129,6 +129,26 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def version_from_tag(tag: str) -> str:
+    raise NotImplementedError
+
+
+def validate_release_tag(tag: str, project_version: str) -> str:
+    raise NotImplementedError
+
+
+def is_prerelease(version: str) -> bool:
+    raise NotImplementedError
+
+
+def sha256sums_content(paths) -> str:
+    raise NotImplementedError
+
+
+def write_sha256sums(paths, output: Path) -> Path:
+    raise NotImplementedError
+
+
 def build_manifest(
     *,
     artifact: Path,
@@ -622,6 +642,14 @@ def cmd_smoke_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_check_release_tag(args: argparse.Namespace) -> int:
+    raise NotImplementedError
+
+
+def cmd_write_checksums(args: argparse.Namespace) -> int:
+    raise NotImplementedError
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build and verify the BelegDock Windows installer.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -635,6 +663,17 @@ def make_parser() -> argparse.ArgumentParser:
     smoke = commands.add_parser("smoke-install", help="install, probe and uninstall the artifact")
     smoke.add_argument("--dist", required=True, type=Path)
     smoke.set_defaults(handler=cmd_smoke_install)
+    release_tag = commands.add_parser(
+        "check-release-tag", help="validate a release tag against the project version"
+    )
+    release_tag.add_argument("--tag", required=True)
+    release_tag.set_defaults(handler=cmd_check_release_tag)
+    checksums = commands.add_parser(
+        "write-checksums", help="write a SHA256SUMS.txt file for release assets"
+    )
+    checksums.add_argument("--output", required=True, type=Path)
+    checksums.add_argument("files", nargs="+", type=Path)
+    checksums.set_defaults(handler=cmd_write_checksums)
     return parser
 
 
