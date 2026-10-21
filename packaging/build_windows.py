@@ -129,24 +129,46 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+_PRERELEASE_SEGMENT = r"(?:alpha|beta|preview|pre|rc|dev|a|b|c)"
+_PRERELEASE_PATTERN = re.compile(
+    rf"(?:^|[.\-_]){_PRERELEASE_SEGMENT}\d*(?:[.\-_]|$)"
+    rf"|\d{_PRERELEASE_SEGMENT}\d*(?:[.\-_]|$)"
+)
+
+
 def version_from_tag(tag: str) -> str:
-    raise NotImplementedError
+    if not tag.startswith("v") or len(tag) == 1:
+        raise ValueError(f"release tag {tag!r} must start with 'v' and name a version")
+    return tag[1:]
 
 
 def validate_release_tag(tag: str, project_version: str) -> str:
-    raise NotImplementedError
+    version = version_from_tag(tag)
+    if version != project_version:
+        raise ValueError(
+            f"release tag {tag!r} version {version} does not match "
+            f"project version {project_version}"
+        )
+    return version
 
 
 def is_prerelease(version: str) -> bool:
-    raise NotImplementedError
+    main = version.strip().lower().split("+", 1)[0]
+    return bool(_PRERELEASE_PATTERN.search(main))
 
 
 def sha256sums_content(paths) -> str:
-    raise NotImplementedError
+    files = sorted(
+        (Path(path) for path in paths if Path(path).name != "SHA256SUMS.txt"),
+        key=lambda path: path.name,
+    )
+    return "".join(f"{sha256_file(path)}  {path.name}\n" for path in files)
 
 
 def write_sha256sums(paths, output: Path) -> Path:
-    raise NotImplementedError
+    output = Path(output)
+    output.write_text(sha256sums_content(paths), encoding="utf-8")
+    return output
 
 
 def build_manifest(
@@ -643,11 +665,18 @@ def cmd_smoke_install(args: argparse.Namespace) -> int:
 
 
 def cmd_check_release_tag(args: argparse.Namespace) -> int:
-    raise NotImplementedError
+    try:
+        version = validate_release_tag(args.tag, _project_version())
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    print(f"version={version}")
+    print(f"prerelease={'true' if is_prerelease(version) else 'false'}")
+    return 0
 
 
 def cmd_write_checksums(args: argparse.Namespace) -> int:
-    raise NotImplementedError
+    write_sha256sums(args.files, args.output)
+    return 0
 
 
 def make_parser() -> argparse.ArgumentParser:
