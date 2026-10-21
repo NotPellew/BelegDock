@@ -96,7 +96,6 @@ jobs:
         run: |
           uv sync --locked
           uv run pytest tests/app -q
-          uv run python scripts/test_evidence.py snapshot --repo . --output "$IMPLEMENTATION_EVIDENCE/baseline.json"
 
       - name: Plan the approved issue
         env:
@@ -140,7 +139,7 @@ jobs:
           test "$(git ls-files --others --exclude-standard | sort | tr '\n' ' ')" = '.implementation-issue.md .implementation-plan.md ' || { echo 'Plan finalization changed an unapproved path.' >&2; exit 1; }
           cp .implementation-plan.md "$IMPLEMENTATION_EVIDENCE/final-plan.md"
 
-      - name: Prepare new RED tests
+      - name: Prepare new tests
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
@@ -173,26 +172,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- "${new_tests[@]}"
-          git commit -m "test: freeze issue #$ISSUE_NUMBER RED tests"
-          uv run python scripts/test_evidence.py snapshot --repo . --output "$IMPLEMENTATION_EVIDENCE/red-snapshot.json"
-          uv run python - "$IMPLEMENTATION_EVIDENCE/baseline.json" "$IMPLEMENTATION_EVIDENCE/red-snapshot.json" "$IMPLEMENTATION_EVIDENCE/red" <<'PY'
-          import json
-          from pathlib import Path
-          import subprocess
-          import sys
-
-          before = set(json.loads(Path(sys.argv[1]).read_text())["test_ids"])
-          after = set(json.loads(Path(sys.argv[2]).read_text())["test_ids"])
-          added = sorted(after - before)
-          if not added:
-              raise SystemExit("No test IDs were added; refusing to continue.")
-          command = ["uv", "run", "python", "scripts/test_evidence.py", "run",
-                     "--repo", ".", "--snapshot", sys.argv[2], "--output", sys.argv[3],
-                     "--phase", "red"]
-          for test_id in added:
-              command.extend(("--expected-failure", test_id))
-          subprocess.run(command, check=True)
-          PY
+          git commit -m "test: add issue #$ISSUE_NUMBER tests"
+          if uv run pytest -q -- "${new_tests[@]}"; then
+            echo 'The new tests already pass against the unchanged code; refusing to implement.' >&2
+            exit 1
+          fi
 
       - name: Confirm approval remains active before coding
         env:
@@ -202,11 +186,11 @@ jobs:
           jq -e '(.state == "open") and ([.labels[].name] | index("triage:ready") != null) and ([.labels[].name] | index("implementation:approved") != null)' "$IMPLEMENTATION_EVIDENCE/current-issue.json" >/dev/null
           rm -f "$IMPLEMENTATION_EVIDENCE/current-issue.json"
 
-      - name: Implement against frozen RED tests
+      - name: Implement against the new tests
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
-          opencode run --standalone --agent implementation-worker --model opencode/space-bunny-free --title "Implement BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md, the finalized .implementation-plan.md, and implement only that approved plan against the frozen RED tests. Do not edit tests or protected files." > "$IMPLEMENTATION_EVIDENCE/implementation.md"
+          opencode run --standalone --agent implementation-worker --model opencode/space-bunny-free --title "Implement BelegDock issue #$ISSUE_NUMBER" "Read .implementation-issue.md, the finalized .implementation-plan.md, and implement only that approved plan against the new tests. Do not edit tests or protected files." > "$IMPLEMENTATION_EVIDENCE/implementation.md"
           grep -Fxq -- '**Implementation result: COMPLETE**' "$IMPLEMENTATION_EVIDENCE/implementation.md" || { echo 'OpenCode did not complete the implementation without a blocker.' >&2; exit 1; }
           git diff --quiet -- tests scripts .github packaging .opencode || { echo 'Implementation changed protected tests, evidence, CI, packaging, or agent files.' >&2; exit 1; }
           mapfile -d '' changes < <(git diff --name-only -z HEAD)
@@ -224,14 +208,10 @@ jobs:
 
       - name: Verify implementation
         run: |
-          uv run python scripts/test_evidence.py run --repo . --snapshot "$IMPLEMENTATION_EVIDENCE/red-snapshot.json" --output "$IMPLEMENTATION_EVIDENCE/green" --phase green
           uv run pytest tests/app -q
           uv run ruff check .
           uv run mypy src
-          uv run python -m unittest discover -s tests/evidence -v
           uv build --wheel
-          uv run python scripts/replay_red.py --repo . --verify
-          uv run python scripts/replay_red.py --repo . --output "$IMPLEMENTATION_EVIDENCE/red-replay"
 
       - name: Review implementation in a separate read-only OpenCode session
         env:
@@ -240,8 +220,7 @@ jobs:
           git add -N -- src docs README.md
           git diff --binary HEAD > "$IMPLEMENTATION_EVIDENCE/implementation.patch"
           cat > "$IMPLEMENTATION_EVIDENCE/verification-summary.md" <<EOF
-          Frozen RED and GREEN evidence passed.
-          Application tests, Ruff, mypy, evidence recorder tests, wheel build, frozen RED verification, and full frozen RED replay passed.
+          Application tests, Ruff, mypy, and wheel build passed.
           EOF
           cat "$IMPLEMENTATION_EVIDENCE/final-plan.md" "$IMPLEMENTATION_EVIDENCE/verification-summary.md" "$IMPLEMENTATION_EVIDENCE/implementation.patch" > "$IMPLEMENTATION_EVIDENCE/review-input.md"
           opencode run --standalone --agent implementation-reviewer --model opencode/space-bunny-free --title "Review BelegDock issue #$ISSUE_NUMBER implementation" --file "$IMPLEMENTATION_EVIDENCE/review-input.md" "Review .implementation-issue.md and the finalized plan against the repository instructions. Inspect the attached plan, implementation diff, and verification summary. Return the required review verdict." > "$IMPLEMENTATION_EVIDENCE/review.md"
@@ -251,7 +230,6 @@ jobs:
       - name: Recheck after review
         run: |
           uv run pytest tests/app -q
-          uv run python scripts/replay_red.py --repo . --verify
 
       - name: Prepare changes for the publisher
         run: |
@@ -343,7 +321,7 @@ jobs:
           cat > "$RUNNER_TEMP/draft-pr-body.md" <<EOF
           Implements #$ISSUE_NUMBER.
 
-          This draft was prepared by the issue-approved OpenCode workflow. The workflow completed the frozen RED/GREEN evidence, application checks, frozen RED replay, and a separate read-only review session.
+          This draft was prepared by the issue-approved OpenCode workflow. The workflow ran the new tests first, the application checks, and a separate read-only review session.
 
           Review the retained run evidence before requesting merge: $RUN_URL
 

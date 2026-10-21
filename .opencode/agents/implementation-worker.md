@@ -1,5 +1,5 @@
 ---
-description: Implement one approved BelegDock issue against frozen RED tests
+description: Implement one approved BelegDock issue against its new tests
 mode: primary
 model: opencode/space-bunny-free
 steps: 100

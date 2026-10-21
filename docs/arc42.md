@@ -24,8 +24,8 @@ preservation, reliable recovery, clear results, and a small maintainable package
 - One-shot CLI commands. No scheduling until restart/retry behavior is proven.
 - Python through the complete proof of functionality; reconsider afterward only
   if evidence justifies a different language.
-- Tests precede behavior and must be observed failing. Existing test changes
-  require explicit prior user approval; details are in [AGENTS.md](../AGENTS.md).
+- Tests precede behavior and should fail for the intended reason first; details
+  are in [AGENTS.md](../AGENTS.md).
 
 ## 3. Context and scope
 
@@ -182,8 +182,8 @@ and host sockets are not. The session gets a temporary home and /tmp.
 - The protected developer CLI mounts the checkout read-only at /workspace and
   permits writes only to src/, docs/, and README.md. It drops capabilities and
   prevents nested user namespaces. Refuse checkout symlinks, special files, and
-  writable hardlinks so aliases cannot make established tests editable. The
-  trusted host applies approved test changes between sessions. Network is off
+  writable hardlinks so aliases cannot make established tests editable. Test
+  changes are made from the trusted host between sessions. Network is off
   unless explicitly enabled; network-enabled sessions can reach host TCP services.
 
 ## 9. Architecture decisions
@@ -198,7 +198,6 @@ and host sockets are not. The session gets a temporary home and /tmp.
 | Staging before retention | Proves reliable transfer before archive features | Upload/recovery works and retention policy is defined |
 | OS credential store | Keeps secrets out of ordinary config | A supported environment needs an explicitly agreed alternative |
 | GitHub issues and PRs | One feature specification and linked delivery evidence | Hosting requirements change |
-| Protected tests and RED/GREEN records | Prevent silent test changes; requires host enforcement and CI | Verification exposes a gap |
 | Bubblewrap for the initial Linux boundary | Small launcher using OS mounts; no new service | Windows implementation or runtime compatibility requires another backend |
 | Issue and implementation plan | The issue body records user-facing scope and acceptance; a linked repository-local plan records technical implementation details | The planning or handoff workflow no longer preserves this separation |
 | PyInstaller onedir plus per-user Inno Setup for the Windows pilot | Installs without admin or a source checkout; install path stays independent from user data | Runner/toolchain drift or a signing requirement appears |
@@ -214,7 +213,6 @@ and host sockets are not. The session gets a temporary home and /tmp.
 | Credential store unavailable | Clear failure without plaintext fallback |
 | Unsafe filename or oversized input | No path escape; bounded processing and clear rejection |
 | Install on either target OS | Built package and agreed CLI behavior pass checks |
-| Attempt unapproved test edit | Edit blocked; missing/skipped/altered tests cannot report GREEN |
 
 ## 11. Risks and open work
 

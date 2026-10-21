@@ -13,7 +13,7 @@ Actions page.
 The worker uses the existing `OPENCODE_API_KEY` secret and the configured free
 `opencode/space-bunny-free` model. It drafts a plan, gets a separate
 read-only plan review, finalizes the plan, then prepares new application tests,
-freezes a test-only checkpoint, and requires assertion-based RED evidence. It
+commits them, and requires them to fail against the unchanged code. It
 implements only under `src/`, `docs/`, or `README.md`, then runs the repository's
 Linux checks and a separate read-only implementation review. The publisher
 rechecks that the issue is open and retains both labels, then applies only the
