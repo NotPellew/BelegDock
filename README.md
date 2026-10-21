@@ -203,9 +203,13 @@ Für den Firmen-Pilot steht eine fertige Windows-Installation ohne
 Administratorrechte bereit; ein Quellcheckout, `uv` oder eine eigene virtuelle
 Umgebung sind nicht nötig.
 
-1. `BelegDock-0.1.0.dev0-windows-x64-setup.exe` aus den CI-Artefakten des
-   `windows-installer`-Laufs herunterladen und die SHA-256-Prüfsumme mit
-   `artifact.json` vergleichen.
+1. `BelegDock-<Version>-windows-x64-setup.exe` von der
+   [GitHub-Releases-Seite](https://github.com/NotPellew/BelegDock/releases)
+   herunterladen (nur die `-setup.exe`; Wheel, sdist und „Source code“ sind
+   nicht nötig) und die SHA-256-Prüfsumme mit dem Eintrag in
+   `SHA256SUMS.txt` desselben Release vergleichen, zum Beispiel mit
+   `Get-FileHash` in PowerShell. Alpha-Versionen wie `0.1.0a1` sind dort
+   als Pre-Release gekennzeichnet.
 2. Die Setup-Datei starten. Der deutsche Assistent installiert nach
    `%LOCALAPPDATA%\Programs\BelegDock`, trägt das Verzeichnis in den
    Benutzer-PATH ein und legt einen Startmenü-Eintrag „BelegDock“ an. Eine

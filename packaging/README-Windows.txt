@@ -9,12 +9,14 @@ Voraussetzungen
 ---------------
 Windows 10 22H2 oder Windows 11 (x64), ein Gmail-Konto mit Lesezugriff und ein
 Lexware-Office-API-Schlüssel. Python oder uv sind für die fertige Installation
-nicht erforderlich. Optional vorab: die SHA-256-Prüfsumme der Setup-Datei mit der
-Angabe in artifact.json vergleichen.
+nicht erforderlich. Die Setup-Datei stammt von der GitHub-Releases-Seite
+(https://github.com/NotPellew/BelegDock/releases). Optional vorab: die
+SHA-256-Prüfsumme der Setup-Datei mit dem Eintrag in SHA256SUMS.txt desselben
+Release vergleichen.
 
 Installation
 ------------
-1. BelegDock-0.1.0.dev0-windows-x64-setup.exe starten.
+1. BelegDock-<Version>-windows-x64-setup.exe starten.
 2. Die Windows-SmartScreen-Warnung erscheint, weil das Paket nicht signiert ist.
    Über "Weitere Informationen" und "Trotzdem ausführen" fortfahren.
 3. Der deutsche Assistent installiert nach

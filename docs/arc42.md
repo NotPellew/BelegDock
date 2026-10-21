@@ -113,8 +113,11 @@ dependencies from the frozen `uv.lock` with `uv export` and `--require-hashes`,
 and pins `pyinstaller` in `packaging/build_windows.py` so `pyproject.toml` and
 `uv.lock` stay untouched. CI retains the installer folder (setup executable,
 `artifact.json` with sha256, size, wheel hash, resolved dependency versions, tool
-versions and git revision, plus the frozen bundle) as a 90-day workflow artifact;
-there is no GitHub Release and no code signing. The installer smoke step launches
+versions and git revision, plus the frozen bundle) as a 90-day workflow artifact.
+On a `v*` tag (or manual dispatch naming an existing tag) the release workflow
+reuses the same build, artifact check and smoke install, then publishes the setup
+executable, wheel, sdist, `artifact.json` and `SHA256SUMS.txt` as a GitHub Release
+(prerelease for PEP 440 pre/dev versions); there is no code signing. The installer smoke step launches
 the frozen desktop executable with `BELEGDOCK_DESKTOP_SMOKE=1`: the hook skips
 credential loading, wires deterministic fake Gmail/Lexware services over a temporary
 `Store`, drives a scripted self-test, appends JSON state lines to a dump, and the

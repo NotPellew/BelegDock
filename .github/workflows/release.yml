@@ -1,0 +1,110 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag (e.g. v0.1.0.dev0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and smoke install
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.release-tag.outputs.version }}
+      prerelease: ${{ steps.release-tag.outputs.prerelease }}
+      commit: ${{ steps.release-tag.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Install development tools
+        run: uv sync --locked
+      - name: Validate release tag
+        id: release-tag
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          uv run --no-sync python packaging/build_windows.py check-release-tag --tag "$env:RELEASE_TAG" >> $env:GITHUB_OUTPUT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "commit=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
+      - name: Build wheel and sdist
+        run: uv build
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem dist\*.whl | Select-Object -First 1).FullName
+          uv run --no-sync python packaging/build_windows.py build --wheel $wheel --dist dist\windows
+      - name: Check artifact
+        shell: pwsh
+        run: uv run --no-sync python packaging/build_windows.py check-artifact --dist dist\windows
+      - name: Smoke install
+        shell: pwsh
+        run: uv run --no-sync python packaging/build_windows.py smoke-install --dist dist\windows
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item dist\windows\BelegDock-*-windows-x64-setup.exe release-assets\
+          Copy-Item dist\windows\artifact.json release-assets\
+          Copy-Item dist\*.whl release-assets\
+          Copy-Item dist\*.tar.gz release-assets\
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: release-assets/
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: release-assets
+      - name: Generate checksums
+        run: python3 packaging/build_windows.py write-checksums --output release-assets/SHA256SUMS.txt release-assets/*
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          COMMIT: ${{ needs.build.outputs.commit }}
+        run: |
+          tagged="$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)"
+          test "$tagged" = "$COMMIT" || { echo "Tag $RELEASE_TAG does not point at the built commit $COMMIT." >&2; exit 1; }
+          args=(--title "BelegDock $RELEASE_TAG" --generate-notes --verify-tag)
+          case "$PRERELEASE" in
+            true) args+=(--prerelease) ;;
+            false) ;;
+            *) echo "Unexpected prerelease value: $PRERELEASE" >&2; exit 1 ;;
+          esac
+          gh release create "$RELEASE_TAG" "${args[@]}" release-assets/*
