@@ -10,13 +10,14 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from . import __version__, accounts, doctor
+from . import setup as account_setup
 from .classification import classify_candidate_mapping
 from .integrations import GmailAdapter, LexwareAdapter
 from .desktop import DesktopUnavailableError, run_desktop
 from .service import refresh_remote_inventory as _refresh_remote_inventory
 from .workflow import DocumentRejected, LocalIntegrityError, RemoteAuthError, Store, TransferActiveError  # noqa: F401
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = account_setup.SCOPES
 LOCAL_INTEGRITY_FAILED = "local_integrity_failed"
 
 QUICK_START = """Schnellstart:
@@ -72,15 +73,7 @@ def build_gmail(credentials: Any) -> Any:
 
 
 def connect_gmail(client_path: Path) -> str:
-    accounts.native_backend()
-    flow = import_module("google_auth_oauthlib.flow").InstalledAppFlow.from_client_secrets_file(
-        str(client_path), SCOPES
-    )
-    credentials = flow.run_local_server(port=0)
-    service = build_gmail(credentials)
-    account = str(service.users().getProfile(userId="me").execute()["emailAddress"])
-    accounts.save_secret("gmail", credentials.to_json())
-    return account
+    return account_setup.connect_gmail(client_path, importer=lambda name: import_module(name))
 
 
 def gmail_client(*, persist: bool = True) -> tuple[str, GmailAdapter]:

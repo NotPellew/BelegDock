@@ -79,6 +79,8 @@ REQUIRED_BUNDLE_FILES = ("certifi/cacert.pem",)
 REQUIRED_MODULES = (
     "belegdock.cli",
     "belegdock.desktop",
+    "belegdock.desktop_setup",
+    "belegdock.setup",
     "certifi",
     "googleapiclient.discovery",
     "googleapiclient.errors",
@@ -87,8 +89,10 @@ REQUIRED_MODULES = (
     "google.auth.exceptions",
     "httplib2",
     "google.auth.transport.requests",
+    "httplib2",
     "httpx",
     "keyring.backends.Windows",
+    "oauthlib.oauth2.rfc6749.errors",
     "platformdirs",
     "tkinter",
 )
@@ -633,11 +637,18 @@ def cmd_smoke_install(args: argparse.Namespace) -> int:
     _require("Schnellstart:" in _capture([console, "--help"]), "help output misses German quick start")
     _run([console, "--data-dir", str(data_dir), "documents"])
     _require((data_dir / "state.sqlite3").is_file(), "documents did not initialize local state")
-    probe = subprocess.run([str(console), "desktop"], capture_output=True, text=True, timeout=120)
-    _require(
-        desktop_probe_is_credential_failure(probe.returncode, probe.stderr),
-        "desktop probe did not report the console credential failure",
+    probe = subprocess.Popen(
+        [str(console), "desktop"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
+    try:
+        _require(
+            not _wait_until(lambda: probe.poll() is not None, timeout=10.0, interval=0.5),
+            "desktop probe exited instead of showing the first-run setup",
+        )
+    finally:
+        if probe.poll() is None:
+            probe.kill()
+        probe.communicate()
     _require(data_dir_is_external(data_dir, install_dir), "user data is inside the install directory")
 
     smoke_root = Path(tempfile.mkdtemp(prefix="belegdock-desktop-smoke-"))
