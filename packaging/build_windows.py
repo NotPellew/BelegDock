@@ -619,6 +619,25 @@ def _desktop_smoke_records(path: Path) -> list[dict]:
     return records
 
 
+def about_identity_mismatches(records: list[dict], manifest: dict) -> list[str]:
+    identities = [
+        record for record in records if record.get("state") == "about" and "version" in record
+    ]
+    if not identities:
+        return ["desktop smoke recorded no About identity"]
+    expected_version = str(manifest.get("version", ""))
+    expected_revision = str(manifest.get("git_revision") or "")[:7]
+    errors = []
+    for record in identities:
+        if str(record.get("version")) != expected_version:
+            errors.append(f"About version {record.get('version')} differs from manifest {expected_version}")
+        if str(record.get("revision") or "") != expected_revision:
+            errors.append(
+                f"About revision {record.get('revision')!r} differs from manifest {expected_revision!r}"
+            )
+    return errors
+
+
 def _desktop_smoke_finished(path: Path) -> bool:
     return any(
         str(record.get("state")) in DESKTOP_SMOKE_TERMINAL_STATES
@@ -626,7 +645,7 @@ def _desktop_smoke_finished(path: Path) -> bool:
     )
 
 
-def _run_desktop_smoke(gui_executable: Path, work_dir: Path) -> None:
+def _run_desktop_smoke(gui_executable: Path, work_dir: Path, manifest: dict) -> None:
     dump = work_dir / "desktop-smoke.jsonl"
     dump.write_text("", encoding="utf-8")
     environment = dict(os.environ)
@@ -664,6 +683,8 @@ def _run_desktop_smoke(gui_executable: Path, work_dir: Path) -> None:
         positions[required] = states.index(required)
     ordered = [positions[required] for required in DESKTOP_SMOKE_REQUIRED_STATES]
     _require(ordered == sorted(ordered), "desktop smoke reached states out of order")
+    mismatches = about_identity_mismatches(records, manifest)
+    _require(not mismatches, "; ".join(mismatches))
     blobs = work_dir / "data" / "blobs"
     _require(
         blobs.is_dir() and any(blobs.iterdir()),
@@ -731,7 +752,7 @@ def cmd_smoke_install(args: argparse.Namespace) -> int:
 
     smoke_root = Path(tempfile.mkdtemp(prefix="belegdock-desktop-smoke-"))
     try:
-        _run_desktop_smoke(install_dir / GUI_EXE, smoke_root)
+        _run_desktop_smoke(install_dir / GUI_EXE, smoke_root, manifest)
     finally:
         shutil.rmtree(smoke_root, ignore_errors=True)
 

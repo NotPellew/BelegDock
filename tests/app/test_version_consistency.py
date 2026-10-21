@@ -1,9 +1,11 @@
 import importlib.util
+import json
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 
 from belegdock import __version__
 from belegdock import cli
@@ -94,11 +96,51 @@ class VersionConsistencyTests(unittest.TestCase):
         self.assertIn("BELEGDOCK_BUILD_REVISION_FILE", spec_text)
         self.assertIn("build_revision.txt", spec_text)
 
-    def test_check_artifact_wires_version_consistency(self):
-        source = (PACKAGING / "build_windows.py").read_text(encoding="utf-8")
+    def test_check_artifact_fails_on_manifest_version_mismatch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            dist = Path(temporary)
+            installer = dist / "BelegDock-9.9.9-windows-x64-setup.exe"
+            installer.write_bytes(b"installer")
+            (dist / self.module.BUNDLE_NAME).mkdir()
+            (dist / "artifact.json").write_text(
+                json.dumps(
+                    {
+                        "artifact": installer.name,
+                        "sha256": self.module.sha256_file(installer),
+                        "size": installer.stat().st_size,
+                        "version": "9.9.9",
+                        "git_revision": None,
+                    }
+                ),
+                encoding="utf-8",
+            )
 
-        self.assertIn("version_mismatches", source)
-        self.assertIn("embedded_revision", source)
+            with self.assertRaises(SystemExit) as raised:
+                self.module.cmd_check_artifact(SimpleNamespace(dist=dist))
+
+        self.assertIn("version mismatch", str(raised.exception))
+        self.assertIn("9.9.9", str(raised.exception))
+
+    def test_about_identity_must_match_the_manifest(self):
+        records = [{"state": "about", "version": __version__, "revision": REVISION[:7]}]
+
+        self.assertEqual(self.module.about_identity_mismatches(records, manifest()), [])
+        self.assertTrue(self.module.about_identity_mismatches(records, manifest(version="9.9.9")))
+        self.assertTrue(self.module.about_identity_mismatches(records, manifest(revision="1234567890")))
+        self.assertTrue(
+            self.module.about_identity_mismatches([{"state": "about", "open": True}], manifest())
+        )
+        self.assertEqual(
+            self.module.about_identity_mismatches(
+                [{"state": "about", "version": __version__, "revision": ""}], manifest(revision=None)
+            ),
+            [],
+        )
+
+    def test_desktop_smoke_invokes_the_about_button(self):
+        smoke = (ROOT / "src" / "belegdock" / "desktop_smoke.py").read_text(encoding="utf-8")
+
+        self.assertIn("about_button.invoke()", smoke)
 
     def test_cli_version_agrees_with_package_version(self):
         output = StringIO()
