@@ -204,6 +204,18 @@ class LexwareAdapter:
             raise ValueError("Lexware upload response is invalid")
         return {"id": result["id"], "voucherId": result["voucherId"]}
 
+    def probe_profile(self) -> dict[str, Any]:
+        response = self.client.get("https://api.lexware.io/v1/profile", timeout=30)
+        if response.status_code in {401, 403}:
+            raise RemoteAuthError(response.status_code)
+        if response.status_code != 200:
+            raise RuntimeError(f"Lexware organization lookup failed (HTTP {response.status_code})")
+        data = response.json()
+        organization_id = data.get("organizationId") if isinstance(data, dict) else None
+        if not isinstance(organization_id, str) or not organization_id:
+            raise ValueError("Lexware organization response is invalid")
+        return {"organizationId": organization_id}
+
     def inventory(self, include_archived: bool = False, expected_organization_id: str | None = None) -> dict[str, Any]:
         organization = self._get("https://api.lexware.io/v1/profile")
         if organization.status_code != 200:

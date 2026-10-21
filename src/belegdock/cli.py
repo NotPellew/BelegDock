@@ -9,12 +9,12 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, NoReturn
 
-from . import __version__, accounts
+from . import __version__, accounts, doctor
 from .classification import classify_candidate_mapping
 from .integrations import GmailAdapter, LexwareAdapter
 from .desktop import DesktopUnavailableError, run_desktop
 from .service import refresh_remote_inventory as _refresh_remote_inventory
-from .workflow import DocumentRejected, LocalIntegrityError, Store, TransferActiveError
+from .workflow import DocumentRejected, LocalIntegrityError, RemoteAuthError, Store, TransferActiveError  # noqa: F401
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 LOCAL_INTEGRITY_FAILED = "local_integrity_failed"
@@ -26,6 +26,7 @@ QUICK_START = """Schnellstart:
   belegdock stage --label LABEL --select MESSAGE_ID:PART_ID
   belegdock documents
   belegdock status
+  belegdock doctor [--online]  (Verbindung nur mit --online geprüft)
   belegdock refresh
   belegdock upload SHA256_HASH
 
@@ -82,14 +83,15 @@ def connect_gmail(client_path: Path) -> str:
     return account
 
 
-def gmail_client() -> tuple[str, GmailAdapter]:
+def gmail_client(*, persist: bool = True) -> tuple[str, GmailAdapter]:
     info = json.loads(accounts.load_secret("gmail"))
     credentials = import_module("google.oauth2.credentials").Credentials.from_authorized_user_info(
         info, SCOPES
     )
     if not credentials.valid:
         credentials.refresh(import_module("google.auth.transport.requests").Request())
-        accounts.save_secret("gmail", credentials.to_json())
+        if persist:
+            accounts.save_secret("gmail", credentials.to_json())
     service = build_gmail(credentials)
     account = str(service.users().getProfile(userId="me").execute()["emailAddress"])
     return account, GmailAdapter(service)
@@ -302,6 +304,18 @@ def format_verbose_exception(error: BaseException) -> str:
     return f"Fehlerdetails: {type(error).__name__}"
 
 
+def run_doctor(*, online: bool = False) -> dict[str, Any]:
+    return doctor.detect(
+        online=online,
+        gmail_account=lambda: gmail_client(persist=False)[0],
+        lexware_remote=lambda: lexware_client(),
+    )
+
+
+def format_doctor_human(result: dict[str, Any]) -> str:
+    return doctor.format_human(result)
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = GermanArgumentParser(
         prog="belegdock",
@@ -366,6 +380,18 @@ def make_parser() -> argparse.ArgumentParser:
     add_command("documents", help="Lokale Dokumente und Übertragungsstatus auflisten")
     status_cmd = add_command("status", help="Lokalen Übertragungsstatus und nächste Schritte zusammenfassen")
     status_cmd.add_argument("--json", action="store_true", help="Ausgabe im JSON-Format erzeugen")
+    doctor_cmd = add_command(
+        "doctor",
+        help="Anmeldedaten offline prüfen; Verbindung nur mit --online",
+        description="Anmeldedatenspeicher und gespeicherte Anmeldedaten offline prüfen. "
+        "Die Verbindung zu Gmail und Lexware wird nur mit --online geprüft.",
+    )
+    doctor_cmd.add_argument(
+        "--online",
+        action="store_true",
+        help="Je eine Identitätsabfrage an Gmail und Lexware senden; Gmail kann ein Token dafür nur im Arbeitsspeicher erneuern; der Anmeldedatenspeicher wird nicht geändert",
+    )
+    doctor_cmd.add_argument("--json", action="store_true", help="Ausgabe im JSON-Format erzeugen")
     add_command("desktop", help="Lokale Desktop-Oberfläche für die Dokumentübertragung öffnen")
     add_command("refresh", help="Lokales Lexware-Dateiinventar aktualisieren")
     upload = add_command("upload", help="Einen vorbereiteten Hash ausdrücklich senden")
@@ -380,6 +406,8 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 def dispatch(args: argparse.Namespace) -> Any:
+    if args.command == "doctor":
+        return run_doctor(online=getattr(args, "online", False))
     if args.command == "desktop":
         return run_desktop(args.data_dir)
     if args.command == "login-gmail":
@@ -459,7 +487,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     try:
         result = dispatch(args)
-        if args.command == "status":
+        if args.command == "doctor":
+            if getattr(args, "json", False):
+                print(json.dumps(result, ensure_ascii=True))
+            else:
+                print(format_doctor_human(result))
+            return 0 if result.get("ok") else 1
+        elif args.command == "status":
             if getattr(args, "json", False):
                 print(json.dumps(result, ensure_ascii=True))
             else:
@@ -609,6 +643,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else:
                     message = "Abstimmung wurde nicht gestartet; nur ein unklarer Upload kann abgestimmt werden. "
                     message += "Prüfe 'belegdock documents'."
+        elif args.command == "doctor":
+            message = "Diagnose fehlgeschlagen; prüfe die Ausführungsumgebung."
         elif args.command.startswith("login"):
             message = "Verbindung fehlgeschlagen; prüfe den nativen Anmeldedatenspeicher und die Konto-/Client-Einrichtung."
         elif args.command == "desktop":

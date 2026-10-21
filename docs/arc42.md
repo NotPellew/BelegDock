@@ -79,6 +79,7 @@ These are module responsibilities, not separate services or a plugin system.
 7. Reconcile an uncertain result only through explicit remote file and voucher reads.
 8. Inspect local transfer and inventory state offline via `status` without making network requests or mutating stored state.
 9. Surface root-cause exception class and message on stderr via `--verbose` / `-v` or `BELEGDOCK_VERBOSE=1` without altering default output, exit codes, or leaking secrets/tracebacks.
+10. Diagnose credential store availability and stored credentials offline via `doctor`, or opt in to bounded, single-request live identity probes with `--online` without leaking secrets.
 
 Desktop operations run off the Tk event loop through one daemon worker thread and a
 queue drained by a `root.after` pump, so widgets are only touched on the event loop.
@@ -174,6 +175,17 @@ and host sockets are not. The session gets a temporary home and /tmp.
   CLI failures emit standard category guidance by default and append a single safe
   `Fehlerdetails: <Typ>: <Meldung>` line on stderr when `--verbose` or `BELEGDOCK_VERBOSE`
   is active, suppressing Python tracebacks and redacting stored credentials.
+- The `doctor` command checks credential store availability and per-secret state
+  (`present`, `missing`, `read_failed`, `store_unavailable`) offline without network
+  requests. It reads the stored values to test presence but never prints or serializes
+  them. With `--online` it executes at most one read-only identity probe per service
+  (Gmail profile, Lexware profile) and reports `ok`, `rejected`, `error`, or `skipped`.
+  Rejection is classified by exception type, not message text: a non-retryable Google
+  `RefreshError`, HTTP 401, Gmail HTTP 403 with an auth reason, an unparsable stored Gmail
+  credential, and Lexware `RemoteAuthError`; transport, quota, and other failures are `error`. The Gmail probe may refresh an
+  expired token in memory but never writes the credential store. Detection lives in
+  `belegdock.doctor` (widget-free, stable codes, reusable by the desktop); German text
+  is produced only by its human formatter.
 - Use the OS credential store and fail explicitly when unavailable. No silent
   plaintext fallback. Keep credentials, message bodies, and document contents out
   of logs and test fixtures.
