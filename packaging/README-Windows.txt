@@ -16,7 +16,7 @@ Release vergleichen.
 
 Installation
 ------------
-1. BelegDock-0.1.0.dev0-windows-x64-setup.exe starten.
+1. BelegDock-<Version>-windows-x64-setup.exe starten.
 2. Die Windows-SmartScreen-Warnung erscheint, weil das Paket nicht signiert ist.
    Über "Weitere Informationen" und "Trotzdem ausführen" fortfahren.
 3. Der deutsche Assistent installiert nach

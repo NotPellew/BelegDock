@@ -4,6 +4,7 @@ import importlib.util
 import io
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -134,11 +135,14 @@ class ReleaseSubcommandTests(unittest.TestCase):
     def test_check_release_tag_subcommand_reports_version_and_prerelease(self):
         module = load_build_module()
         stdout = io.StringIO()
-        with contextlib.redirect_stdout(stdout):
-            result = module.main(["check-release-tag", "--tag", "v0.1.0.dev0"])
+        with (
+            mock.patch.object(module, "_project_version", return_value="0.1.0a1"),
+            contextlib.redirect_stdout(stdout),
+        ):
+            result = module.main(["check-release-tag", "--tag", "v0.1.0a1"])
         self.assertEqual(result, 0)
         output = stdout.getvalue()
-        self.assertIn("version=0.1.0.dev0", output)
+        self.assertIn("version=0.1.0a1", output)
         self.assertIn("prerelease=true", output)
 
     def test_check_release_tag_subcommand_fails_closed_on_mismatch(self):
@@ -164,6 +168,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("needs: build", text)
         self.assertIn("gh release create", text)
         self.assertIn("--prerelease", text)
+        self.assertIn("--verify-tag", text)
+        self.assertIn("persist-credentials: false", text)
         self.assertNotIn("softprops", text)
         self.assertNotIn("action-gh-release", text)
 

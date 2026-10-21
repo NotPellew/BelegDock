@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.tag || github.ref }}
+  group: ${{ github.workflow }}-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -25,6 +25,7 @@ jobs:
     outputs:
       version: ${{ steps.release-tag.outputs.version }}
       prerelease: ${{ steps.release-tag.outputs.prerelease }}
+      commit: ${{ steps.release-tag.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,7 +40,10 @@ jobs:
         shell: pwsh
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: uv run --no-sync python packaging/build_windows.py check-release-tag --tag "$env:RELEASE_TAG" >> $env:GITHUB_OUTPUT
+        run: |
+          uv run --no-sync python packaging/build_windows.py check-release-tag --tag "$env:RELEASE_TAG" >> $env:GITHUB_OUTPUT
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "commit=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
       - name: Build wheel and sdist
         run: uv build
       - name: Install Inno Setup
@@ -79,7 +83,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.build.outputs.commit }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: release-assets
@@ -89,11 +94,17 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          COMMIT: ${{ needs.build.outputs.commit }}
         run: |
-          args=(--title "BelegDock $RELEASE_TAG" --generate-notes)
-          if [ "$PRERELEASE" = "true" ]; then
-            args+=(--prerelease)
-          fi
+          tagged="$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)"
+          test "$tagged" = "$COMMIT" || { echo "Tag $RELEASE_TAG does not point at the built commit $COMMIT." >&2; exit 1; }
+          args=(--title "BelegDock $RELEASE_TAG" --generate-notes --verify-tag)
+          case "$PRERELEASE" in
+            true) args+=(--prerelease) ;;
+            false) ;;
+            *) echo "Unexpected prerelease value: $PRERELEASE" >&2; exit 1 ;;
+          esac
           gh release create "$RELEASE_TAG" "${args[@]}" release-assets/*

@@ -40,3 +40,5 @@ Test file: `tests/app/test_release.py` (new; no existing test file changes).
 3. Add `.github/workflows/release.yml` with a Windows build job (checkout of the tag, `uv build`, Inno Setup installer build, `check-artifact`, `smoke-install`, artifact upload) and an Ubuntu publish job (`needs: build`, `contents: write`, checksum generation, `gh release create` with `--prerelease` when flagged).
 4. Update the Windows-Installation section in `README.md`, `packaging/README-Windows.txt`, and the deployment view in `docs/arc42.md`.
 5. Verify: `uv run pytest tests/app -q`, `uv run ruff check .`, `uv run mypy src`, `uv run python scripts/replay_red.py --verify`, workflow YAML parse, and a mutation check on the tag/version guard.
+
+Recovery: if publishing fails after `gh release create` started, delete the partial release with `gh release delete <tag>` and re-run the workflow for the same tag.
