@@ -35,6 +35,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName=BelegDock
+SetupIconFile=icon\belegdock.ico
 UninstallDisplayIcon={app}\BelegDock-Desktop.exe
 
 [Languages]

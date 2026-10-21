@@ -6,6 +6,11 @@ DESKTOP_ENTRY = os.path.join(SPECPATH, "desktop_entry.py")
 BUILD_REVISION_NAME = "build_revision.txt"
 REVISION_FILE = os.environ.get("BELEGDOCK_BUILD_REVISION_FILE")
 REVISION_DATAS = [(REVISION_FILE, "belegdock")] if REVISION_FILE else []
+ICON = os.path.join(SPECPATH, "icon", "belegdock.ico")
+WINDOW_ICON_PNG = os.path.normpath(
+    os.path.join(SPECPATH, "..", "src", "belegdock", "assets", "belegdock.png")
+)
+WINDOW_ICON_DATAS = [(WINDOW_ICON_PNG, "belegdock/assets")]
 
 HIDDEN_IMPORTS = [
     "belegdock",
@@ -60,13 +65,14 @@ console_exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=ICON,
 )
 
 desktop_analysis = Analysis(
     [DESKTOP_ENTRY],
     pathex=[],
     binaries=[],
-    datas=REVISION_DATAS,
+    datas=[*REVISION_DATAS, *WINDOW_ICON_DATAS],
     hiddenimports=HIDDEN_IMPORTS,
     hookspath=[],
     hooksconfig={},
@@ -91,6 +97,7 @@ desktop_exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=ICON,
 )
 
 bundle = COLLECT(

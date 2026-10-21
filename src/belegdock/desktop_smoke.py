@@ -77,6 +77,7 @@ class _SmokeDriver:
         self.deadline = time.monotonic() + timeout
 
     def start(self) -> None:
+        self._write("icon", applied=bool(self.application.window_icon_applied))
         self._poll(self._labels_ready, self._on_labels, "labels")
 
     def _write(self, state: str, **fields: Any) -> None:

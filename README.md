@@ -139,6 +139,8 @@ Fehler ausgegeben.
 „Über BelegDock“ im Kopfbereich zeigt Version, gegebenenfalls die Build-Revision
 sowie Lizenz- und Datenschutzhinweise.
 
+BelegDock hat ein eigenes Anwendungssymbol (Fenster, Programmdatei, Installer, Startmenü).
+
 `--select` für weitere Anhänge wiederholen. Das Scannen sendet nichts; Gmail-
 Nachrichtenantworten können Inline-Anhangsdaten enthalten, aber nur ausdrücklich
 ausgewählte Anhänge werden vorbereitet. Wenn ein Label keine PDF- oder XML-Anhänge
@@ -264,8 +266,7 @@ dieses Verzeichnis bewusst selbst löschen.
 
 Unterstützt sind Windows 10 22H2 (10.0.19045) und Windows 11, nur x64; ARM64 und
 ältere Windows-Versionen lehnt der Installer ab. Die Anleitung für den Pilot liegt
-dem Paket als `README-Windows.txt` bei. Das Paket enthält kein eigenes
-Anwendungssymbol und ist nicht signiert. Die Offline-Paketprüfung testet weder
+dem Paket als `README-Windows.txt` bei. Das Paket ist nicht signiert. Die Offline-Paketprüfung testet weder
 Gmail- noch Lexware-Konnektivität; ein separater Windows-Test des gebauten
 Python-Pakets bestand mit Windows Credential Manager, dem Live-Scannen und
 Vorbereiten in Gmail sowie dem Senden und der Ablehnungsbehandlung in Lexware.
