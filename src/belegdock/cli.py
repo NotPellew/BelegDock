@@ -13,7 +13,7 @@ from . import __version__, accounts, doctor
 from . import setup as account_setup
 from .classification import classify_candidate_mapping
 from .integrations import GmailAdapter, LexwareAdapter
-from .desktop import DesktopUnavailableError, run_desktop
+from .desktop import DesktopStartError, DesktopUnavailableError, run_desktop
 from .service import refresh_remote_inventory as _refresh_remote_inventory
 from .workflow import DocumentRejected, LocalIntegrityError, RemoteAuthError, Store, TransferActiveError  # noqa: F401
 
@@ -540,6 +540,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         else:
             print(transfer_active_wait_message(args.hash), file=sys.stderr)
+        if is_verbose(args):
+            print(format_verbose_exception(error), file=sys.stderr)
+        return 1
+    except DesktopStartError as error:
+        print(error.message, file=sys.stderr)
         if is_verbose(args):
             print(format_verbose_exception(error), file=sys.stderr)
         return 1

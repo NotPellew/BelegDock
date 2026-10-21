@@ -10,6 +10,9 @@ from .integrations import LexwareAdapter
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 GMAIL_AUTH_TIMEOUT_SECONDS = 180
+OAUTH_SUCCESS_MESSAGE = (
+    "Anmeldung abgeschlossen. Du kannst dieses Fenster schließen und zu BelegDock zurückkehren."
+)
 KEY_PATTERN = re.compile(r"[\x21-\x7e]+")
 Importer = Callable[[str], Any]
 
@@ -62,10 +65,8 @@ def _load_flow(client_path: Path, importer: Importer) -> Any:
     return flow_module.InstalledAppFlow.from_client_secrets_file(str(client_path), SCOPES)
 
 
-def _run_flow(flow: Any, timeout_seconds: int | None) -> Any:
-    if timeout_seconds is None:
-        return flow.run_local_server(port=0)
-    return flow.run_local_server(port=0, timeout_seconds=timeout_seconds)
+def _run_flow(flow: Any, **options: Any) -> Any:
+    return flow.run_local_server(port=0, **options)
 
 
 def _fetch_account(credentials: Any, importer: Importer) -> str:
@@ -79,7 +80,8 @@ def authorize_gmail(
     client_path: Path, *, importer: Importer, timeout_seconds: int | None = None
 ) -> GmailAuthorization:
     accounts.native_backend()
-    credentials = _run_flow(_load_flow(client_path, importer), timeout_seconds)
+    options = {} if timeout_seconds is None else {"timeout_seconds": timeout_seconds}
+    credentials = _run_flow(_load_flow(client_path, importer), **options)
     account = _fetch_account(credentials, importer)
     return GmailAuthorization(account, credentials.to_json())
 
@@ -138,7 +140,12 @@ def authorize_gmail_guided(
     except Exception:
         raise SetupError("client_file") from None
     try:
-        credentials = _run_flow(flow, timeout_seconds)
+        credentials = _run_flow(
+            flow,
+            timeout_seconds=timeout_seconds,
+            authorization_prompt_message=None,
+            success_message=OAUTH_SUCCESS_MESSAGE,
+        )
     except Exception as error:
         raise SetupError(_classify_flow_error(error)) from None
     try:

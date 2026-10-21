@@ -89,7 +89,9 @@ view are created only afterwards. Setup workers only authorize (Gmail OAuth, bou
 a timeout, client JSON read from a user-chosen path and never stored) or validate (one
 Lexware profile probe); the Tk thread saves to the OS store only after checking that the
 attempt was not cancelled, so a cancelled or abandoned attempt can never persist
-credentials. CLI `login-gmail` shares the widget-free OAuth code.
+credentials. A Gmail token rejected at client construction (expired or revoked) reopens setup once with
+the Gmail step marked expired; stored credentials are overwritten only after a successful
+reconnect. CLI `login-gmail` shares the widget-free OAuth code.
 
 Desktop operations run off the Tk event loop through one daemon worker thread and a
 queue drained by a `root.after` pump, so widgets are only touched on the event loop.

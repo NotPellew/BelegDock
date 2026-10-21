@@ -13,6 +13,7 @@ from typing import Any
 
 import httpx
 
+from . import doctor
 from .classification import CandidateClassification, lookup_candidate_classification
 from .service import refresh_remote_inventory
 from .workflow import (
@@ -1227,6 +1228,19 @@ def configure_theme(root: Any, tk: Any, ttk: Any) -> None:
     style.configure("Primary.TButton", padding=(14, 8), foreground=colors["accent"])
 
 
+def _run_setup(tk: Any, ttk: Any, filedialog: Any, state: Any) -> Any:
+    from . import desktop_setup
+
+    return desktop_setup.run_setup(tk, ttk, filedialog, state)
+
+
+def _is_rejection(error: Exception) -> bool:
+    try:
+        return bool(doctor.classify_gmail_error(error)["status"] == "rejected")
+    except Exception:
+        return False
+
+
 def run_desktop(data_dir: Path | None) -> None:
     try:
         import tkinter as tk
@@ -1254,14 +1268,21 @@ def run_desktop(data_dir: Path | None) -> None:
         raise DesktopStartError(CREDENTIAL_STORE_UNAVAILABLE_MESSAGE)
     root = None
     if route == "setup":
-        from . import desktop_setup
-
-        root = desktop_setup.run_setup(tk, ttk, filedialog, state)
+        root = _run_setup(tk, ttk, filedialog, state)
         if root is None:
             return
     try:
         store = Store(data_dir or cli.default_data_dir())
-        account, gmail = cli.gmail_client()
+        try:
+            account, gmail = cli.gmail_client()
+        except Exception as error:
+            if root is not None or not _is_rejection(error):
+                raise
+            expired = account_setup.SetupState(state.store_available, "expired", state.lexware)
+            root = _run_setup(tk, ttk, filedialog, expired)
+            if root is None:
+                return
+            account, gmail = cli.gmail_client()
         remote = cli.lexware_client()
         application = DesktopApplication(
             DesktopService(store, account, gmail, remote), tk, ttk, messagebox, root=root
@@ -1286,9 +1307,9 @@ CREDENTIAL_STORE_UNAVAILABLE_MESSAGE = _(
     "benötigt, unter Linux ein Secret-Service wie der GNOME-Schlüsselbund oder KWallet."
 )
 DESKTOP_START_FAILED_MESSAGE = _(
-    "BelegDock konnte nicht gestartet werden. Melde dich zuerst mit "
-    "„belegdock login-gmail“ und „belegdock login-lexware“ an und starte die "
-    "Anwendung erneut."
+    "BelegDock konnte nicht gestartet werden. Prüfe die Internetverbindung und starte die "
+    "Anwendung erneut. Besteht das Problem weiter, siehe die Hinweise zur Einrichtung "
+    "in der mitgelieferten Anleitung."
 )
 
 

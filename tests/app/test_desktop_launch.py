@@ -20,7 +20,7 @@ class DesktopLaunchTests(unittest.TestCase):
         self.assertIn("Desktop-Oberfläche ist nicht verfügbar", messages[-1])
         self.assertNotIn("private-import-detail", messages[-1])
 
-    def test_generic_failure_reports_login_hint_without_exception_text(self):
+    def test_generic_failure_reports_start_failure_without_exception_text(self):
         desktop_main = getattr(desktop, "desktop_main", None)
         self.assertTrue(callable(desktop_main), "desktop.desktop_main is missing")
         messages = []
@@ -28,8 +28,8 @@ class DesktopLaunchTests(unittest.TestCase):
             status = desktop_main(messages.append)
         self.assertEqual(status, 1)
         self.assertTrue(messages)
-        self.assertIn("login-gmail", messages[-1])
-        self.assertIn("login-lexware", messages[-1])
+        self.assertEqual(messages[-1], desktop.DESKTOP_START_FAILED_MESSAGE)
+        self.assertNotIn("login-gmail", messages[-1])
         self.assertNotIn("secret-token-value", messages[-1])
 
     def test_success_reports_nothing_and_returns_zero(self):

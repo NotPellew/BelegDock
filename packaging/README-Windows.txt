@@ -40,10 +40,15 @@ Schritt 1: Gmail verbinden
     Ohne diesen Eintrag verweigert Google den Zugriff.
   - Klicken Sie auf "OAuth-Client-Datei auswählen" und wählen Sie die Datei. Klicken
     Sie dann auf "Mit Google verbinden". Es öffnet sich Ihr Browser.
-  - Weil die Anwendung bei Google im Testmodus läuft, erscheint die Warnung "Google hat
-    diese App nicht überprüft". Das ist erwartet. Klicken Sie auf "Erweitert" und dann
-    auf "Weiter zu ... (unsicher)" und erlauben Sie den Lesezugriff auf Gmail. BelegDock
-    liest nur; es verändert, löscht oder sendet keine E-Mails.
+  - Weil die Anwendung bei Google im Testmodus läuft, erscheint die Warnung "Diese App
+    wurde nicht von Google überprüft". Das ist erwartet. Klicken Sie auf „Weiter“
+    (gegebenenfalls zuerst auf „Erweitert“) und erlauben Sie den Lesezugriff auf Gmail.
+    BelegDock liest nur; es verändert, löscht oder sendet keine E-Mails.
+  - Zeigt Google stattdessen "Zugriff blockiert", hat der Herausgeber Ihre Gmail-Adresse
+    noch nicht als Testnutzer eingetragen. Bitten Sie ihn darum.
+  - Im Testmodus läuft die Google-Anmeldung nach etwa 7 Tagen ab. Dann zeigt BelegDock
+    beim Start die Einrichtung mit dem Hinweis "Gmail-Anmeldung abgelaufen"; wählen Sie
+    die Datei erneut und klicken Sie auf "Mit Google verbinden".
   - Kehren Sie zu BelegDock zurück. Bei Erfolg steht dort "Verbunden als ...".
   - Mit "Abbrechen" können Sie jederzeit neu beginnen. Dauert die Anmeldung im Browser
     zu lange (etwa 3 Minuten), erscheint ein Hinweis und Sie versuchen es erneut.

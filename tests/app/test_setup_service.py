@@ -74,7 +74,9 @@ class GmailAuthorizationTests(unittest.TestCase):
         self.harness.flow_module.InstalledAppFlow.from_client_secrets_file.assert_called_once_with(
             "client.json", READONLY
         )
-        self.harness.flow.run_local_server.assert_called_once_with(port=0, timeout_seconds=120)
+        options = self.harness.flow.run_local_server.call_args.kwargs
+        self.harness.flow.run_local_server.assert_called_once()
+        self.assertEqual((options["port"], options["timeout_seconds"]), (0, 120))
         self.assertEqual(result.account, "tester@example.test")
         self.assertEqual(result.token, TOKEN)
         self.save.assert_not_called()

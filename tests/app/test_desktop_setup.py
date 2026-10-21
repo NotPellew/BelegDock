@@ -27,7 +27,9 @@ class FakeVar:
 def make_tk():
     registry = []
     variable = type("Var", (FakeVar,), {"registry": registry})
-    return SimpleNamespace(StringVar=variable, BooleanVar=variable, TclError=RuntimeError, vars=registry)
+    return SimpleNamespace(
+        StringVar=variable, BooleanVar=variable, TclError=RuntimeError, Canvas=MagicMock(), vars=registry
+    )
 
 
 class SetupViewHarness:
@@ -159,7 +161,7 @@ class SetupViewStateTests(unittest.TestCase):
         joined = "\n".join(harness.texts())
 
         self.assertIn(HINT_URL, joined)
-        self.assertIn("nicht überprüft", joined)
+        self.assertIn("nicht von Google überprüft", joined)
         self.assertIn("OAuth-Client-Datei auswählen", joined)
         self.assertIn("Mit Google verbinden", joined)
         self.assertIn("Prüfen und speichern", joined)
@@ -406,6 +408,7 @@ class LexwareStepTests(unittest.TestCase):
 
         harness.dispatch.complete_next()
 
+        harness.view.lexware_key.set("")
         for text in harness.texts():
             self.assertNotIn(LEXWARE_KEY, text)
 

@@ -1,6 +1,8 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import import_module
+import json
+import os
 from pathlib import Path
 from typing import Any
 import webbrowser
@@ -18,12 +20,18 @@ from .setup import (
 
 LEXWARE_KEY_URL = "https://app.lexware.de/addons/public-api"
 SETUP_START_WIDTH = 760
-SETUP_MIN_SIZE = (480, 480)
+SETUP_MIN_SIZE = (480, 360)
+SCREEN_MARGIN = 96
+SETUP_PROBE_ENV = "BELEGDOCK_SETUP_PROBE_DUMP"
+CANVAS_BACKGROUND = "#fbfcff"
 MIN_WRAP = 240
 MAX_WRAP = 760
 WRAP_MARGIN = 112
+CANVAS_WIDTH_OFFSET = 88
+WHEEL_SEQUENCES = ("<MouseWheel>", "<Button-4>", "<Button-5>")
 KEY_MASK = "•"
-RETRYABLE_KEY_CODES = {"network", "store"}
+CLEARED_KEY_CODES = {"rejected", "invalid_key"}
+NO_PREFIX_CODES = {"cancelled", "expired"}
 
 INTRO_TEXT = _(
     "Verbinde einmalig Gmail und Lexware. Gmail wird nur gelesen; BelegDock sendet "
@@ -32,8 +40,8 @@ INTRO_TEXT = _(
 GMAIL_HINT = _(
     "Wähle die OAuth-Client-Datei (JSON), die du vom Herausgeber erhalten hast. Sie wird "
     "nur gelesen und nicht kopiert. Danach meldest du dich im Browser bei Google an. "
-    "Zeigt Google „Google hat diese App nicht überprüft“, wähle „Erweitert“, fahre fort "
-    "und erlaube den Lesezugriff."
+    "Zeigt Google „Diese App wurde nicht von Google überprüft“, klicke auf „Weiter“ "
+    "(gegebenenfalls zuerst auf „Erweitert“) und erlaube den Lesezugriff."
 )
 LEXWARE_HINT = _(
     "Erzeuge in Lexware Office einen API-Schlüssel auf dieser Seite (Link anklicken). Der "
@@ -44,6 +52,10 @@ NOT_CONNECTED_TEXT = _("Nicht verbunden")
 CONNECTED_STORED_TEXT = _("Verbunden (gespeichert)")
 CONNECTED_TEXT = _("Verbunden als %(account)s")
 ERROR_PREFIX = _("Fehler: ")
+TESTER_HINT = _(
+    "Zeigt Google „Zugriff blockiert“, muss der Herausgeber deine Gmail-Adresse als "
+    "Testnutzer eintragen."
+)
 
 _STORE_TEXT = _(
     "Der Anmeldedatenspeicher des Betriebssystems ist nicht verfügbar. BelegDock speichert "
@@ -51,7 +63,7 @@ _STORE_TEXT = _(
 )
 GUIDANCE = {
     "gmail": {
-        "connecting": _("Verbinde… Schließe die Anmeldung im Browser ab."),
+        "connecting": _("Verbinde… Schließe die Anmeldung im Browser ab.") + " " + TESTER_HINT,
         "no_client_file": _("Wähle zuerst die OAuth-Client-Datei aus."),
         "client_file": _(
             "Die OAuth-Client-Datei ist nicht lesbar oder ungültig. Wähle die JSON-Datei "
@@ -62,7 +74,9 @@ GUIDANCE = {
             "Testnutzer eingetragen sein. Erlaube im Browser außerdem den schreibgeschützten "
             "Zugriff auf Gmail."
         ),
-        "timeout": _("Die Anmeldung im Browser wurde nicht rechtzeitig abgeschlossen. Versuche es erneut."),
+        "timeout": _("Die Anmeldung im Browser wurde nicht rechtzeitig abgeschlossen. Versuche es erneut.")
+        + " "
+        + TESTER_HINT,
         "network": _("Google ist nicht erreichbar. Prüfe die Internetverbindung und versuche es erneut."),
         "store": _STORE_TEXT,
         "rejected": _("Google hat die Anfrage abgelehnt. Wende dich an den Herausgeber."),
@@ -71,7 +85,11 @@ GUIDANCE = {
             "Gespeicherte Anmeldedaten konnten nicht gelesen werden (Speicher gesperrt?). "
             "Verbinde Gmail erneut."
         ),
-        "cancelled": _("Verbindung abgebrochen. Du kannst es erneut versuchen."),
+        "cancelled": _("Verbindung abgebrochen. Du kannst es erneut versuchen.") + " " + TESTER_HINT,
+        "expired": _(
+            "Gmail-Anmeldung abgelaufen – bitte erneut verbinden. Im Testmodus von Google "
+            "läuft die Anmeldung nach etwa 7 Tagen ab."
+        ),
     },
     "lexware": {
         "connecting": _("Verbinde… Der Schlüssel wird geprüft."),
@@ -120,6 +138,8 @@ def _initial_step(stored: str) -> StepState:
         return StepState("connected")
     if stored == "read_failed":
         return StepState("error", "unreadable")
+    if stored == "expired":
+        return StepState("error", "expired")
     return StepState()
 
 
@@ -164,12 +184,25 @@ class SetupView:
         self._closed = False
         self._finished = False
         self._wrapped: list[Any] = []
+        self._previous: dict[str, StepState] = {}
         self.gmail_status = tk.StringVar()
         self.lexware_status = tk.StringVar()
         self.client_file_name = tk.StringVar(value=NO_FILE_TEXT)
         self.lexware_key = tk.StringVar()
         self._build()
         self._refresh()
+        self._record_probe()
+
+    def _record_probe(self) -> None:
+        path = os.environ.get(SETUP_PROBE_ENV)
+        if not path:
+            return
+        record = {"state": "setup", "gmail": self.gmail_state.status, "lexware": self.lexware_state.status}
+        try:
+            with open(path, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, sort_keys=True) + "\n")
+        except OSError:
+            pass
 
     @property
     def is_busy(self) -> bool:
@@ -185,15 +218,28 @@ class SetupView:
         self.root.protocol("WM_DELETE_WINDOW", self.request_close)
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
-        self.frame = ttk.Frame(self.root, padding=24, style="Main.TFrame")
+        self.frame = ttk.Frame(self.root, padding=(24, 24, 24, 12), style="Main.TFrame")
         self.frame.grid(row=0, column=0, sticky="nsew")
         self.frame.columnconfigure(0, weight=1)
+        self.frame.rowconfigure(0, weight=1)
+        self.canvas = self.tk.Canvas(self.frame, highlightthickness=0, background=CANVAS_BACKGROUND)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.scrollbar = ttk.Scrollbar(self.frame, orient="vertical", command=self.canvas.yview)
+        self.scrollbar.grid(row=0, column=1, sticky="ns")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.content = ttk.Frame(self.canvas, style="Main.TFrame")
+        self.content.columnconfigure(0, weight=1)
+        self._content_window = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
+        self.content.bind("<Configure>", lambda _event: self._content_resized())
+        self.canvas.bind("<Configure>", self._canvas_resized)
+        for sequence in WHEEL_SEQUENCES:
+            self.root.bind(sequence, self._on_wheel)
         self._wrapped.append(
-            self._label(self.frame, _("BelegDock einrichten"), "SectionTitle.TLabel", row=0)
+            self._label(self.content, _("BelegDock einrichten"), "SectionTitle.TLabel", row=0)
         )
-        self._wrapped.append(self._label(self.frame, INTRO_TEXT, "Helper.TLabel", row=1, pady=(6, 14)))
+        self._wrapped.append(self._label(self.content, INTRO_TEXT, "Helper.TLabel", row=1, pady=(6, 14)))
 
-        gmail = ttk.Frame(self.frame, style="Main.TFrame")
+        gmail = ttk.Frame(self.content, style="Main.TFrame")
         gmail.grid(row=2, column=0, sticky="ew", pady=(0, 14))
         gmail.columnconfigure(1, weight=1)
         ttk.Label(gmail, text=_("1. Gmail verbinden"), style="SubsectionTitle.TLabel").grid(
@@ -218,7 +264,7 @@ class SetupView:
         )
         self._wrapped.append(self.gmail_label)
 
-        lexware = ttk.Frame(self.frame, style="Main.TFrame")
+        lexware = ttk.Frame(self.content, style="Main.TFrame")
         lexware.grid(row=3, column=0, sticky="ew")
         lexware.columnconfigure(1, weight=1)
         ttk.Label(lexware, text=_("2. Lexware verbinden"), style="SubsectionTitle.TLabel").grid(
@@ -246,8 +292,9 @@ class SetupView:
         )
         self._wrapped.append(self.lexware_label)
 
-        footer = ttk.Frame(self.frame, style="Main.TFrame")
-        footer.grid(row=4, column=0, sticky="ew", pady=(18, 0))
+        self.footer = ttk.Frame(self.frame, style="Main.TFrame")
+        self.footer.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        footer = self.footer
         footer.columnconfigure(0, weight=1)
         self.progress = ttk.Progressbar(footer, mode="indeterminate", length=180)
         self.progress.grid(row=0, column=0, sticky="w")
@@ -257,7 +304,38 @@ class SetupView:
             footer, text=_("Weiter"), command=self.proceed, style="Primary.TButton"
         )
         self.continue_button.grid(row=0, column=2, sticky="e", padx=(12, 0))
-        self.frame.bind("<Configure>", lambda event: self.resize(getattr(event, "width", 0)))
+
+    def _canvas_resized(self, event: Any) -> None:
+        width = int(getattr(event, "width", 0))
+        self.canvas.itemconfigure(self._content_window, width=width)
+        self.resize(width + CANVAS_WIDTH_OFFSET)
+        self._content_resized()
+
+    def _content_resized(self) -> None:
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        if self.content.winfo_reqheight() > self.canvas.winfo_height():
+            self.scrollbar.grid()
+        else:
+            self.scrollbar.grid_remove()
+
+    def _on_wheel(self, event: Any) -> None:
+        if self.content.winfo_reqheight() <= self.canvas.winfo_height():
+            return
+        number = getattr(event, "num", 0)
+        if number == 4:
+            step = -1
+        elif number == 5:
+            step = 1
+        else:
+            step = -1 if getattr(event, "delta", 0) > 0 else 1
+        self.canvas.yview_scroll(step, "units")
+
+    def _release_bindings(self) -> None:
+        for sequence in WHEEL_SEQUENCES:
+            self.root.unbind(sequence)
+
+    def preferred_height(self) -> int:
+        return int(self.content.winfo_reqheight() + self.footer.winfo_reqheight() + 48)
 
     def _label(
         self,
@@ -287,15 +365,16 @@ class SetupView:
 
     def _step_text(self, step: str, state: StepState) -> str:
         if state.status == "connected":
-            if state.account:
-                return CONNECTED_TEXT % {"account": state.account}
-            return CONNECTED_STORED_TEXT
+            text = CONNECTED_TEXT % {"account": state.account} if state.account else CONNECTED_STORED_TEXT
+            if state.code is None:
+                return text
+            return text + "\n" + GUIDANCE[step].get(state.code, GUIDANCE[step]["unexpected"])
         if state.status == "connecting":
             return GUIDANCE[step]["connecting"]
         if state.code is None:
             return NOT_CONNECTED_TEXT
         guidance = GUIDANCE[step].get(state.code, GUIDANCE[step]["unexpected"])
-        return guidance if state.code == "cancelled" else ERROR_PREFIX + guidance
+        return guidance if state.code in NO_PREFIX_CODES else ERROR_PREFIX + guidance
 
     def _set_enabled(self, widget: Any, enabled: bool) -> None:
         widget.state(["!disabled"] if enabled else ["disabled"])
@@ -317,10 +396,29 @@ class SetupView:
             self.progress.grid()
             self.progress.start(20)
 
+    def _step(self, step: str) -> StepState:
+        return self.gmail_state if step == "gmail" else self.lexware_state
+
+    def _set_step(self, step: str, state: StepState) -> None:
+        if step == "gmail":
+            self.gmail_state = state
+        else:
+            self.lexware_state = state
+
     def _begin(self, step: str) -> int:
         self._attempt += 1
         self._active = step
+        self._previous[step] = self._step(step)
         return self._attempt
+
+    def _fail(self, step: str, code: str) -> None:
+        previous = self._previous.get(step, StepState())
+        if previous.status == "connected":
+            self._set_step(step, StepState("connected", code, previous.account))
+        elif code == "cancelled":
+            self._set_step(step, StepState("missing", code))
+        else:
+            self._set_step(step, StepState("error", code))
 
     def _finish(self) -> None:
         self._active = None
@@ -363,7 +461,7 @@ class SetupView:
             except Exception as problem:
                 error = problem
         if error is not None:
-            self.gmail_state = StepState("error", _error_code(error))
+            self._fail("gmail", _error_code(error))
         else:
             self.gmail_state = StepState("connected", account=str(result.account))
         self._refresh()
@@ -395,8 +493,8 @@ class SetupView:
                 error = problem
         if error is not None:
             code = _error_code(error)
-            self.lexware_state = StepState("error", code)
-            if code not in RETRYABLE_KEY_CODES:
+            self._fail("lexware", code)
+            if code in CLEARED_KEY_CODES:
                 self.lexware_key.set("")
         else:
             self.lexware_key.set("")
@@ -409,11 +507,7 @@ class SetupView:
             return
         self._attempt += 1
         self._finish()
-        cancelled = StepState("missing", "cancelled")
-        if step == "gmail":
-            self.gmail_state = cancelled
-        else:
-            self.lexware_state = cancelled
+        self._fail(step, "cancelled")
         self._refresh()
 
     def proceed(self) -> None:
@@ -421,6 +515,7 @@ class SetupView:
             return
         self._finished = True
         self._closed = True
+        self._release_bindings()
         self.frame.destroy()
         self.on_complete()
 
@@ -429,7 +524,12 @@ class SetupView:
             return
         self._closed = True
         self._attempt += 1
+        self._release_bindings()
         self.on_close()
+
+
+def fit_height(needed: int, screen_height: int) -> int:
+    return max(SETUP_MIN_SIZE[1], min(needed, screen_height - SCREEN_MARGIN))
 
 
 def run_setup(
@@ -454,7 +554,7 @@ def run_setup(
         dispatcher.close()
         root.quit()
 
-    SetupView(
+    view = SetupView(
         root,
         tk,
         ttk,
@@ -465,10 +565,10 @@ def run_setup(
         on_complete=finish,
         on_close=close,
     )
-    root.geometry(f"{SETUP_MIN_SIZE[0]}x{SETUP_MIN_SIZE[1]}")
+    root.minsize(*SETUP_MIN_SIZE)
+    root.geometry(f"{SETUP_START_WIDTH}x{SETUP_MIN_SIZE[1]}")
     root.update()
-    height = root.winfo_reqheight()
-    root.minsize(SETUP_MIN_SIZE[0], height)
+    height = fit_height(view.preferred_height(), root.winfo_screenheight())
     root.geometry(f"{SETUP_START_WIDTH}x{height}")
     root.mainloop()
     if completed:

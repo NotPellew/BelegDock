@@ -106,7 +106,12 @@ Der Lexware-Schlüssel wird verdeckt eingegeben; „Prüfen und speichern“ fü
 eine Profilabfrage aus und speichert den Schlüssel nur bei Erfolg im
 Anmeldedatenspeicher. Gespeicherte Anmeldedaten gelten als verbunden und müssen nicht
 erneut eingegeben werden; „Weiter“ öffnet die Hauptansicht, sobald beide verbunden
-sind. Ist der Anmeldedatenspeicher nicht verfügbar, zeigt BelegDock eine Fehlermeldung
+sind. Im Google-Testmodus laufen Anmeldungen nach etwa 7 Tagen ab: Lehnt Google das
+gespeicherte Token beim Start ab, öffnet BelegDock die Einrichtung mit dem
+markierten Schritt „Gmail-Anmeldung abgelaufen“ (Lexware bleibt verbunden); das
+gespeicherte Token wird erst bei erfolgreicher Neuverbindung überschrieben. Ein
+Fenster, das höher als der Bildschirm wäre, scrollt; „Abbrechen“ und „Weiter“
+bleiben sichtbar. Ist der Anmeldedatenspeicher nicht verfügbar, zeigt BelegDock eine Fehlermeldung
 und kein Fenster. Die Einrichtung sendet nichts an Lexware und wiederholt nichts
 automatisch.
 Ein Gmail-Label auswählen, Anhänge nach Dateiname, Dokumenttyp, Empfehlung und
