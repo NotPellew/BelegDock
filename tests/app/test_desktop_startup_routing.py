@@ -149,6 +149,7 @@ class StartupRoutingTests(unittest.TestCase):
         self.assertIn("root", inspect.signature(desktop.DesktopApplication.__init__).parameters)
         tk = MagicMock(name="tk")
         existing = MagicMock(name="existing-root")
+        existing.winfo_width.return_value = 1200
 
         application = desktop.DesktopApplication(Mock(), tk, MagicMock(), Mock(), root=existing)
 
