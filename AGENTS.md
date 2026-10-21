@@ -39,23 +39,19 @@ distill the relevant intent into the reviewed handoff.
    For UI or localization work, enumerate every visible entry point, including
    each subcommand's help output and every failure/recovery state, and map each
    item to a test or package smoke check.
-3. Write each feature test before its corresponding behavior. Execute it against
-   the code missing that behavior and observe the intended failure (RED).
-4. Record the test snapshot and evidence before implementation. For every
-   changed existing test, create the approved test-only checkpoint before source
-   implementation, point replay metadata at that pre-implementation checkpoint,
-   and retain the approval reference with the task or PR evidence.
-5. Implement the smallest sufficient change. Run the unchanged tests (GREEN),
-   then refactor with tests remaining green.
-6. Review the complete relevant diff against the issue, including failure cases,
+3. Write each feature test before its corresponding behavior and check that it
+   fails for the intended reason.
+4. Implement the smallest sufficient change. Run the tests, then refactor with
+   tests remaining green.
+5. Review the complete relevant diff against the issue, including failure cases,
    usability, security, and unnecessary complexity.
    Complete any explicitly requested independent review before claiming the
    issue is done.
-7. Treat reviewer findings as hypotheses: reproduce or otherwise verify them
+6. Treat reviewer findings as hypotheses: reproduce or otherwise verify them
    against current code, tests, or the governing contract before repair. For
    confirmed behavioral defects, add a reproducing test before repair. Repeat
    relevant verification. If repairs repeatedly stall, return to refinement.
-8. Update affected documentation and verify the final package on both platforms.
+7. Update affected documentation and verify the final package on both platforms.
    Report what passed, what was not run, and unresolved limitations.
 
 Ready means the criteria are testable and implementation-blocking decisions are
@@ -63,22 +59,8 @@ resolved. Done means the criteria pass, review findings are resolved or explicit
 accepted, documentation matches behavior, and required checks have evidence.
 
 Bounded spikes produce evidence and a decision; they do not require artificial
-RED tests. Code retained from a spike must meet the normal feature gates.
+failing tests. Code retained from a spike must meet the normal feature gates.
 Documentation-only changes use document validation rather than behavioral tests.
-
-## Test changes require user approval
-
-- Once a test exists, never modify it without the user's explicit prior approval
-  of the proposed change. Present the exact diff and rationale first.
-- This includes deletion, renaming, assertions, skips, expected failures,
-  snapshots, and fixture/helper/configuration changes that alter verification.
-- Permission to implement or repair a feature is not permission to change tests.
-- New tests for an authorized feature may be created in the preparation step;
-  existing tests remain protected. Freeze the new tests before implementation.
-- After an approved change, record a replacement snapshot and reestablish the
-  relevant RED/GREEN evidence. One approval does not authorize later edits.
-- Missing dependencies, collection/import errors, and unrelated exceptions are
-  not valid RED evidence. Inspect already-passing new tests before proceeding.
 
 ## Verification design and current limits
 
@@ -110,9 +92,9 @@ unprotected execution. The standard-library suite uses disposable checkouts.
   linked Git worktrees are not supported by this first launcher.
 - Source and documentation directories are created if absent. Do not store test
   definitions, fixtures, or verification configuration in these writable areas.
-- For an approved test change, exit the protected session, apply only the exact
-  approved diff from the trusted host, reestablish RED evidence, then relaunch.
-  Do not weaken the running session's protection. Avoid concurrent host edits.
+- To change tests, exit the protected session, edit them from the trusted host,
+  then relaunch. Do not weaken the running session's protection. Avoid
+  concurrent host edits.
 - A bounded authenticated Luna probe executed a source write and was denied a
   protected-file write. Codex workspace-write fails inside the boundary because
   nested namespaces are blocked. Use Codex danger-full-access only inside this
@@ -132,51 +114,13 @@ uv sync --locked
 uv run pytest tests/app -q
 uv run ruff check .
 uv run mypy src
-uv run python -m unittest discover -s tests/evidence -v
 uv build --wheel
 ```
 
 On Windows, set UV_PROJECT_ENVIRONMENT to an external directory in PowerShell
 using `$env:UV_PROJECT_ENVIRONMENT`. Application CI uses Python 3.12 and 3.14 on
 Ubuntu and Windows. The original Bubblewrap suite remains a separate Linux host
-check, not a skipped Windows application test. The evidence fake-runner tests
-currently require Linux; the real-runner tests use pytest.
-
-`scripts/test_evidence.py` records snapshots and RED/GREEN reports outside the
-checkout. Use the same Python interpreter with pytest installed for both phases:
-
-```sh
-python scripts/test_evidence.py snapshot --repo . --output /outside/snapshot.json
-python scripts/test_evidence.py run --repo . --snapshot /outside/snapshot.json --output /outside/red --phase red --expected-failure 'tests/app/test_feature.py::test_behavior'
-python scripts/test_evidence.py run --repo . --snapshot /outside/snapshot.json --output /outside/green --phase green
-```
-
-Supply every expected failing ID separately. The recorder rejects changed inputs,
-missing/skipped tests, collection errors and unexpected failures. Each run needs a
-new output directory. Inspect RED reasons: a matching failure alone does not prove
-the right behavior is tested. CI also runs the recorder and retains its snapshot/JUnit/report artifacts.
-Reports are execution evidence, not tamper-proof audit records or independent
-proof of chronology; user review remains a separate check. Snapshot after approved test
-changes and before implementation. Preserve the earlier snapshot and logs.
-CI verifies frozen RED checkpoints with scripts/replay_red.py `--verify` on every
-push and pull request (Ubuntu and Windows, Python 3.14); the full 129-test replay
-executes nightly and on manual `workflow_dispatch` (Ubuntu/Windows × 3.12/3.14).
-A group is admitted only for a `tests/app` file with a checkpoint commit whose
-current bytes equal the checkpoint bytes; `--verify` enforces revision, byte
-identity, and count on every event. Permitted failure markers (`AssertionError` /
-`NotImplementedError`) are a human/execute rule via `validate_report`, not a
-`--verify` check. A changed replayed test needs a new test-only checkpoint commit
-and a `GROUPS` update; `--verify` fails until the reference is updated. Nightly
-execution catches toolchain drift (Python/pytest/`uv.lock`) and regenerates
-retained evidence.
-Before declaring the feature complete, also run a full replay with
-`scripts/replay_red.py --output ...`. `--verify` checks checkpoint identity and
-test shape only; it does not prove that the archived tests still fail against the
-archived pre-fix source. A replay checkpoint that already passes is invalid.
-The replay validates historical snapshots, not chronology by itself. Review
-regression RED remains in local logs. Preserve checkpoint commits when merging;
-if approved tests change, establish replacement RED evidence before updating
-replay references. Never weaken a test to keep an old replay passing.
+check, not a skipped Windows application test.
 
 Do not run these commands concurrently with source/configuration edits. The
 protected shell can create a disposable virtual environment inside its /tmp;

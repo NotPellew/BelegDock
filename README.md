@@ -303,7 +303,7 @@ ein erneuter Live-Nachweis erforderlich sind.
 
 ## Entwicklung
 
-- [AGENTS.md](AGENTS.md): Arbeitsablauf, unveränderliche Tests, Entwicklungsbefehle und Isolation.
+- [AGENTS.md](AGENTS.md): Arbeitsablauf, Tests, Entwicklungsbefehle und Isolation.
 - [Architektur](docs/arc42.md): Geltungsbereich, Entscheidungen, Grenzen und offene Arbeit.
 - [Issue-Automatisierung](.github/implementation-worker.md): Freigabe, Einrichtung und Grenzen des GitHub-Implementierungsworkers.
 - [Feature-Formular](https://github.com/NotPellew/BelegDock/issues/new?template=feature.yml):

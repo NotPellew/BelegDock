@@ -1,5 +1,5 @@
 ---
-description: Prepare new RED tests for one approved BelegDock issue
+description: Prepare new tests for one approved BelegDock issue
 mode: primary
 model: opencode/space-bunny-free
 steps: 70
@@ -75,8 +75,7 @@ fixture, helper, verification configuration, source, workflow, or documentation.
 Test observable acceptance criteria and relevant failure behavior. Every new
 test must fail for the missing behavior, not because of an import, dependency,
 or collection error. Do not invoke external services or use real credentials.
-The workflow will establish the baseline, snapshot, RED evidence, and test-only
-checkpoint after this phase. Keep your final response short.
+The workflow commits the new tests and checks that they fail after this phase. Keep your final response short.
 Start with exactly `**Decision gate: READY**` only when the issue is clear and
 the new tests cover its acceptance criteria. Otherwise start with exactly
 `**Decision gate: STOP**` and state the human decision or missing information.
