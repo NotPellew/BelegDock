@@ -115,6 +115,14 @@ Windows and Linux. User data, credentials, and host-specific development
 permissions are separate from repository contents. The package targets Python
 3.12+; CI checks Python 3.12/3.14 on Ubuntu and Windows.
 
+The desktop header offers an „Über BelegDock“ dialog (German) showing the
+product name, `belegdock.__version__`, the embedded short build revision when
+present, the Apache-2.0 license and project links, and a short privacy note;
+the text is composed widget-free in `belegdock.build_info`. Frozen Windows
+builds embed the git revision as `belegdock/build_revision.txt`, and
+`check-artifact` fails when package, pyproject, `artifact.json`, and embedded
+revision disagree. The application icon remains deferred (issue #43).
+
 The Windows pilot also ships as a frozen PyInstaller onedir bundle inside a
 per-user Inno Setup installer (`PrivilegesRequired=lowest`, `x64os`, Windows
 10 22H2 or later) built from the built wheel. The installer adds the install

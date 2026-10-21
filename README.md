@@ -136,6 +136,9 @@ CLI-Wiederherstellungsanleitung unten verwenden. Python muss mit Tk-Unterstützu
 installiert sein; bei fehlender optionaler Desktop-Abhängigkeit wird ein klarer
 Fehler ausgegeben.
 
+„Über BelegDock“ im Kopfbereich zeigt Version, gegebenenfalls die Build-Revision
+sowie Lizenz- und Datenschutzhinweise.
+
 `--select` für weitere Anhänge wiederholen. Das Scannen sendet nichts; Gmail-
 Nachrichtenantworten können Inline-Anhangsdaten enthalten, aber nur ausdrücklich
 ausgewählte Anhänge werden vorbereitet. Wenn ein Label keine PDF- oder XML-Anhänge
