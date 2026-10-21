@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 import webbrowser
 
-from .desktop import _, _TkWorkerDispatcher, configure_theme
+from .desktop import _, _TkWorkerDispatcher, apply_window_icon, configure_theme
 from .setup import (
     GMAIL_AUTH_TIMEOUT_SECONDS,
     SetupError,
@@ -542,6 +542,7 @@ def run_setup(
     tk: Any, ttk: Any, filedialog: Any, state: SetupState, services: SetupServices | None = None
 ) -> Any:
     root = tk.Tk()
+    apply_window_icon(root, tk)
     configure_theme(root, tk, ttk)
     style = ttk.Style(root)
     style.configure("Ok.TLabel", background="#fbfcff", foreground="#0b7a3b")

@@ -75,7 +75,7 @@ KNOWN_INCIDENTAL_TEXT = {
 }
 
 REQUIRED_BUNDLE_ENTRIES = ("_tkinter.pyd", "_tcl_data", "_tk_data", CONSOLE_EXE, GUI_EXE)
-REQUIRED_BUNDLE_FILES = ("certifi/cacert.pem",)
+REQUIRED_BUNDLE_FILES = ("certifi/cacert.pem", "belegdock/assets/belegdock.png")
 REQUIRED_MODULES = (
     "belegdock.cli",
     "belegdock.desktop",
@@ -104,6 +104,7 @@ DESKTOP_SMOKE_DATA_ENV = "BELEGDOCK_DESKTOP_SMOKE_DATA"
 SETUP_PROBE_DUMP_ENV = "BELEGDOCK_SETUP_PROBE_DUMP"
 DESKTOP_SMOKE_TERMINAL_STATES = {"terminal", "error", "timeout"}
 DESKTOP_SMOKE_REQUIRED_STATES = (
+    "icon",
     "labels",
     "candidates",
     "progress",
@@ -638,6 +639,15 @@ def about_identity_mismatches(records: list[dict], manifest: dict) -> list[str]:
     return errors
 
 
+def window_icon_mismatches(records: list[dict]) -> list[str]:
+    icons = [record for record in records if record.get("state") == "icon"]
+    if not icons:
+        return ["desktop smoke recorded no window icon state"]
+    if not all(record.get("applied") is True for record in icons):
+        return ["desktop smoke did not apply the window icon"]
+    return []
+
+
 def _desktop_smoke_finished(path: Path) -> bool:
     return any(
         str(record.get("state")) in DESKTOP_SMOKE_TERMINAL_STATES
@@ -683,7 +693,7 @@ def _run_desktop_smoke(gui_executable: Path, work_dir: Path, manifest: dict) -> 
         positions[required] = states.index(required)
     ordered = [positions[required] for required in DESKTOP_SMOKE_REQUIRED_STATES]
     _require(ordered == sorted(ordered), "desktop smoke reached states out of order")
-    mismatches = about_identity_mismatches(records, manifest)
+    mismatches = [*window_icon_mismatches(records), *about_identity_mismatches(records, manifest)]
     _require(not mismatches, "; ".join(mismatches))
     blobs = work_dir / "data" / "blobs"
     _require(

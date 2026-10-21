@@ -1,6 +1,8 @@
+import base64
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 import gettext
+from importlib import resources
 import json
 import os
 from pathlib import Path
@@ -36,6 +38,7 @@ PREPARE_HELPER = _(
 DOCUMENT_TABLE_COLUMNS = ("filename", "size", "status")
 DESKTOP_LAYOUT_BREAKPOINT = 1050
 INITIAL_WINDOW_GEOMETRY = "1488x1060"
+WINDOW_ICON_RESOURCE = "assets/belegdock.png"
 MIN_WINDOW_SIZE = (760, 720)
 LOCAL_RESTORE_GUIDANCE = _(
     "Die Integrität lokaler Dokumente ist fehlgeschlagen; stelle state.sqlite3 und blobs "
@@ -384,6 +387,7 @@ class DesktopApplication:
     _operation_progress_template: str | None = None
     _smoke_dump: Path | None = None
     _about_dialog: Any = None
+    window_icon_applied = False
 
     def __init__(
         self, service: DesktopService, tk: Any, ttk: Any, messagebox: Any, root: Any = None
@@ -394,6 +398,7 @@ class DesktopApplication:
         self.messagebox = messagebox
         self.root = root if root is not None else tk.Tk()
         self.root.title(_("BelegDock"))
+        self._apply_window_icon()
         self.label = tk.StringVar()
         self.notice = tk.StringVar(value=_("Wähle ein Gmail-Label."))
         self._candidate_ids: dict[str, str] = {}
@@ -752,6 +757,9 @@ class DesktopApplication:
 
     def _configure_style(self) -> None:
         configure_theme(self.root, self.tk, self.ttk)
+
+    def _apply_window_icon(self) -> None:
+        self.window_icon_applied = apply_window_icon(self.root, self.tk)
 
     def _configure_window(self) -> None:
         self.root.geometry(INITIAL_WINDOW_GEOMETRY)
@@ -1276,6 +1284,17 @@ def configure_theme(root: Any, tk: Any, ttk: Any) -> None:
         foreground=[("selected", colors["foreground"])],
     )
     style.configure("Primary.TButton", padding=(14, 8), foreground=colors["accent"])
+
+
+def apply_window_icon(root: Any, tk: Any) -> bool:
+    try:
+        data = resources.files("belegdock").joinpath(WINDOW_ICON_RESOURCE).read_bytes()
+        image = tk.PhotoImage(data=base64.b64encode(data).decode("ascii"))
+        root.iconphoto(True, image)
+        root._belegdock_window_icon = image
+    except Exception:
+        return False
+    return True
 
 
 def _run_setup(tk: Any, ttk: Any, filedialog: Any, state: Any) -> Any:
