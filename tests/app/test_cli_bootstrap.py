@@ -23,7 +23,7 @@ class CliBootstrapTests(unittest.TestCase):
         status, output = self.run_cli("--version")
 
         self.assertEqual(status, 0)
-        self.assertEqual(output.strip(), "0.1.0.dev0")
+        self.assertEqual(output.strip(), "0.1.0a1")
 
 
 if __name__ == "__main__":

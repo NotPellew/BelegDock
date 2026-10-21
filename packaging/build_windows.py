@@ -15,7 +15,7 @@ PYINSTALLER_HOOKS_VERSION = "2026.7"
 BUNDLE_NAME = "BelegDock"
 CONSOLE_EXE = "belegdock.exe"
 GUI_EXE = "BelegDock-Desktop.exe"
-DEFAULT_VERSION = "0.1.0.dev0"
+DEFAULT_VERSION = "0.1.0a1"
 
 BUILD_ROOT = Path(r"C:\belegdock-build")
 VENV_DIR = BUILD_ROOT / "venv"

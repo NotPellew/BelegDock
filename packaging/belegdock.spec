@@ -1,6 +1,6 @@
 import os
 
-VERSION = os.environ.get("BELEGDOCK_VERSION", "0.1.0.dev0")
+VERSION = os.environ.get("BELEGDOCK_VERSION", "0.1.0a1")
 CONSOLE_ENTRY = os.path.join(SPECPATH, "console_entry.py")
 DESKTOP_ENTRY = os.path.join(SPECPATH, "desktop_entry.py")
 BUILD_REVISION_NAME = "build_revision.txt"
