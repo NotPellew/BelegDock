@@ -10,10 +10,12 @@ import sys
 import threading
 from threading import Lock
 from typing import Any
+import webbrowser
 
 import httpx
 
 from . import doctor
+from .build_info import LICENSE_URL, PROJECT_URL, about_text, build_info
 from .classification import CandidateClassification, lookup_candidate_classification
 from .service import refresh_remote_inventory
 from .workflow import (
@@ -94,6 +96,8 @@ GENERIC_GUIDANCE = _(
     "Vorgang fehlgeschlagen; prüfe Kontoverbindung und lokalen Speicher. Siehe README.md."
 )
 DESKTOP_SMOKE_ENV = "BELEGDOCK_DESKTOP_SMOKE"
+ABOUT_BUTTON_TEXT = _("Über BelegDock")
+ABOUT_TITLE = _("Über BelegDock")
 
 
 def format_size(value: Any) -> str:
@@ -379,6 +383,7 @@ class DesktopApplication:
     _cancel_event: threading.Event | None = None
     _operation_progress_template: str | None = None
     _smoke_dump: Path | None = None
+    _about_dialog: Any = None
 
     def __init__(
         self, service: DesktopService, tk: Any, ttk: Any, messagebox: Any, root: Any = None
@@ -604,6 +609,10 @@ class DesktopApplication:
         self.ttk.Label(header, text=_("BelegDock"), style="AppTitle.TLabel").grid(
             row=0, column=0, sticky="w"
         )
+        self.about_button = self.ttk.Button(
+            header, text=ABOUT_BUTTON_TEXT, command=self._show_about
+        )
+        self.about_button.grid(row=0, column=1, sticky="e")
         self.ttk.Separator(header, orient="horizontal").grid(
             row=1, column=0, sticky="ew", pady=(16, 0)
         )
@@ -846,7 +855,45 @@ class DesktopApplication:
         parent.columnconfigure(1, weight=1)
 
     def _show_about(self) -> None:
-        raise NotImplementedError
+        version, revision = build_info()
+        dialog = self.tk.Toplevel(self.root)
+        self._about_dialog = dialog
+        title = getattr(dialog, "title", None)
+        if callable(title):
+            title(ABOUT_TITLE)
+        transient = getattr(dialog, "transient", None)
+        if callable(transient):
+            transient(self.root)
+        grab = getattr(dialog, "grab_set", None)
+        if callable(grab):
+            grab()
+        self.ttk.Label(
+            dialog, text=about_text(), wraplength=520, justify="left"
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=20, pady=(20, 12))
+        self.ttk.Button(
+            dialog,
+            text=_("Projektseite öffnen"),
+            command=lambda: webbrowser.open(PROJECT_URL),
+        ).grid(row=1, column=0, sticky="w", padx=(20, 8), pady=(0, 20))
+        self.ttk.Button(
+            dialog,
+            text=_("Lizenz öffnen"),
+            command=lambda: webbrowser.open(LICENSE_URL),
+        ).grid(row=1, column=1, sticky="w", padx=(0, 8), pady=(0, 20))
+        self.ttk.Button(
+            dialog, text=_("Schließen"), command=self._close_about
+        ).grid(row=1, column=2, sticky="e", padx=(0, 20), pady=(0, 20))
+        focus = getattr(dialog, "focus_set", None)
+        if callable(focus):
+            focus()
+        self._record_state("about", version=version, revision=revision or "")
+
+    def _close_about(self) -> None:
+        dialog = getattr(self, "_about_dialog", None)
+        self._about_dialog = None
+        destroy = getattr(dialog, "destroy", None)
+        if callable(destroy):
+            destroy()
 
     def run(self) -> None:
         self.root.mainloop()

@@ -127,7 +127,7 @@ Sendeergebnisse an. Lange Vorgänge laufen in einem Arbeitsthread; die Oberfläc
 zeigt einen Status, einen determinierten Fortschritt beim Vorbereiten und einen
 „Abbrechen“-Knopf. Ein Abbruch wirkt nur an sicheren Punkten vor dem Senden: nach
 dem Start des Lexware-POST ist der Knopf deaktiviert, und ein Abbruch ist nicht mehr
-möglich. Beim Schließen während eines abbrechbaren Vorgangs wird der Abbruch
+möglich. „Über BelegDock“ im Kopfbereich zeigt Version, gegebenenfalls die Build-Revision sowie Lizenz- und Datenschutzhinweise. Beim Schließen während eines abbrechbaren Vorgangs wird der Abbruch
 angefordert und die Oberfläche beendet; läuft der POST bereits, schließt die
 Oberfläche erst nach dem Ergebnis. Fehlermeldungen nennen die Kategorie
 (Ablehnung, lokaler Speicher, Gmail, Anmeldung, Verbindung, bereits aktiv) und bei

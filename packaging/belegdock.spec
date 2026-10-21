@@ -3,9 +3,13 @@ import os
 VERSION = os.environ.get("BELEGDOCK_VERSION", "0.1.0.dev0")
 CONSOLE_ENTRY = os.path.join(SPECPATH, "console_entry.py")
 DESKTOP_ENTRY = os.path.join(SPECPATH, "desktop_entry.py")
+BUILD_REVISION_NAME = "build_revision.txt"
+REVISION_FILE = os.environ.get("BELEGDOCK_BUILD_REVISION_FILE")
+REVISION_DATAS = [(REVISION_FILE, "belegdock")] if REVISION_FILE else []
 
 HIDDEN_IMPORTS = [
     "belegdock",
+    "belegdock.build_info",
     "belegdock.cli",
     "belegdock.desktop",
     "belegdock.desktop_setup",
@@ -62,7 +66,7 @@ desktop_analysis = Analysis(
     [DESKTOP_ENTRY],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=REVISION_DATAS,
     hiddenimports=HIDDEN_IMPORTS,
     hookspath=[],
     hooksconfig={},

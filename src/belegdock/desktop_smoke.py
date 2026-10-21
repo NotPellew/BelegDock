@@ -174,6 +174,10 @@ class _SmokeDriver:
         self.application._layout_sections(SimpleNamespace(width=1200))
         wide = self.application._section_layout
         self._write("layout", narrow=narrow, wide=wide)
+        self.application._show_about()
+        about_open = self.application._about_dialog is not None
+        self._write("about", open=about_open)
+        self.application._close_about()
         self._write("terminal", ok=True)
         self._finish()
 
