@@ -68,9 +68,10 @@ def test_corrupt_gmail_secret_names_the_login_command():
 
 def test_online_help_distinguishes_memory_from_credential_store():
     output = StringIO()
-    with redirect_stdout(output), pytest.raises(SystemExit):
-        cli.main(["doctor", "--help"])
+    with redirect_stdout(output):
+        exit_code = cli.main(["doctor", "--help"])
 
+    assert exit_code == 0
     help_text = " ".join(output.getvalue().split())
     assert "Arbeitsspeicher" in help_text
     assert "Anmeldedatenspeicher wird nicht geändert" in help_text
