@@ -85,6 +85,7 @@ REQUIRED_MODULES = (
     "google_auth_oauthlib.flow",
     "google.oauth2.credentials",
     "google.auth.exceptions",
+    "httplib2",
     "google.auth.transport.requests",
     "httpx",
     "keyring.backends.Windows",

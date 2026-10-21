@@ -24,6 +24,7 @@ ERROR_LABELS = {
     "connection": "Verbindungsfehler",
     "service_error": "Dienstfehler",
     "rate_limited": "Anfragelimit erreicht",
+    "invalid_credentials": "Gespeicherte Anmeldedaten unbrauchbar",
     "unexpected": "Unerwarteter Fehler",
 }
 
@@ -109,10 +110,12 @@ def classify_gmail_error(error: BaseException) -> dict[str, Any]:
     google_exceptions = import_module("google.auth.exceptions")
     if isinstance(error, google_exceptions.RefreshError):
         if getattr(error, "retryable", False):
-            return _failure("error", "connection", error)
+            return _failure("error", "service_error", error)
         return _failure("rejected", "refresh_rejected", error)
-    if isinstance(error, google_exceptions.TransportError | OSError):
+    if isinstance(error, google_exceptions.TransportError | OSError | import_module("httplib2").HttpLib2Error):
         return _failure("error", "connection", error)
+    if isinstance(error, ValueError):
+        return _failure("rejected", "invalid_credentials", error)
     if isinstance(error, import_module("googleapiclient.errors").HttpError):
         status = getattr(error.resp, "status", None)
         status = int(status) if status is not None else None
@@ -120,9 +123,10 @@ def classify_gmail_error(error: BaseException) -> dict[str, Any]:
             return _failure("rejected", "http_401", error, status)
         if status == 403:
             reasons = _http_reasons(error)
-            if reasons & GMAIL_AUTH_REASONS and not any("limit" in item or "quota" in item for item in reasons):
+            limited = any("limit" in item or "quota" in item for item in reasons)
+            if reasons & GMAIL_AUTH_REASONS and not limited:
                 return _failure("rejected", "http_403_auth", error, status)
-            return _failure("error", "rate_limited" if reasons else "service_error", error, status)
+            return _failure("error", "rate_limited" if limited else "service_error", error, status)
         return _failure("error", "service_error", error, status)
     return _failure("error", "unexpected", error)
 

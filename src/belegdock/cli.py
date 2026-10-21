@@ -389,7 +389,7 @@ def make_parser() -> argparse.ArgumentParser:
     doctor_cmd.add_argument(
         "--online",
         action="store_true",
-        help="Je eine Identitätsabfrage an Gmail und Lexware senden; Gmail kann ein Token dafür nur im Speicher erneuern",
+        help="Je eine Identitätsabfrage an Gmail und Lexware senden; Gmail kann ein Token dafür nur im Arbeitsspeicher erneuern; der Anmeldedatenspeicher wird nicht geändert",
     )
     doctor_cmd.add_argument("--json", action="store_true", help="Ausgabe im JSON-Format erzeugen")
     add_command("desktop", help="Lokale Desktop-Oberfläche für die Dokumentübertragung öffnen")
