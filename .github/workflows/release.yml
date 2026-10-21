@@ -37,7 +37,9 @@ jobs:
       - name: Validate release tag
         id: release-tag
         shell: pwsh
-        run: uv run --no-sync python packaging/build_windows.py check-release-tag --tag "${{ inputs.tag || github.ref_name }}" >> $env:GITHUB_OUTPUT
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: uv run --no-sync python packaging/build_windows.py check-release-tag --tag "$env:RELEASE_TAG" >> $env:GITHUB_OUTPUT
       - name: Build wheel and sdist
         run: uv build
       - name: Install Inno Setup
