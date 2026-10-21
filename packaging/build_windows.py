@@ -206,6 +206,46 @@ def build_manifest(
     }
 
 
+def apply_signature(
+    manifest: dict,
+    signed: Path,
+    *,
+    expected_signer: str,
+    subject: str,
+    thumbprint: str,
+    timestamper: str,
+    verified_at: str,
+) -> dict:
+    signed_path = Path(signed)
+    fields = {
+        "expected_signer": expected_signer,
+        "subject": subject,
+        "thumbprint": thumbprint,
+        "timestamper": timestamper,
+        "verified_at": verified_at,
+    }
+    empty = [name for name, value in fields.items() if not value.strip()]
+    if empty:
+        raise ValueError(f"signature metadata is empty: {', '.join(empty)}")
+    if "signature" in manifest:
+        raise ValueError("manifest already describes a signed installer")
+    if signed_path.name != manifest["artifact"]:
+        raise ValueError(
+            f"signed file {signed_path.name} does not match manifest artifact {manifest['artifact']}"
+        )
+    if expected_signer not in subject:
+        raise ValueError(f"signer {subject!r} does not contain the expected signer {expected_signer!r}")
+    digest = sha256_file(signed_path)
+    if digest == manifest["sha256"]:
+        raise ValueError("signed file is identical to the unsigned installer")
+    return {
+        **manifest,
+        "sha256": digest,
+        "size": signed_path.stat().st_size,
+        "signature": {**fields, "unsigned_sha256": manifest["sha256"]},
+    }
+
+
 BUILD_REVISION_FILENAME = "build_revision.txt"
 BUILD_REVISION_ENV = "BELEGDOCK_BUILD_REVISION_FILE"
 
@@ -802,6 +842,28 @@ def cmd_write_checksums(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_apply_signature(args: argparse.Namespace) -> int:
+    assets = Path(args.assets)
+    manifest_path = assets / "artifact.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    try:
+        updated = apply_signature(
+            manifest,
+            args.signed,
+            expected_signer=args.expected_signer,
+            subject=args.subject,
+            thumbprint=args.thumbprint,
+            timestamper=args.timestamper,
+            verified_at=args.verified_at,
+        )
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    shutil.copyfile(args.signed, assets / manifest["artifact"])
+    manifest_path.write_text(json.dumps(updated, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(updated["signature"], indent=2))
+    return 0
+
+
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build and verify the BelegDock Windows installer.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -826,6 +888,18 @@ def make_parser() -> argparse.ArgumentParser:
     checksums.add_argument("--output", required=True, type=Path)
     checksums.add_argument("files", nargs="+", type=Path)
     checksums.set_defaults(handler=cmd_write_checksums)
+    signature = commands.add_parser(
+        "apply-signature",
+        help="replace the unsigned installer in release assets with the signed one",
+    )
+    signature.add_argument("--assets", required=True, type=Path)
+    signature.add_argument("--signed", required=True, type=Path)
+    signature.add_argument("--expected-signer", required=True)
+    signature.add_argument("--subject", required=True)
+    signature.add_argument("--thumbprint", required=True)
+    signature.add_argument("--timestamper", required=True)
+    signature.add_argument("--verified-at", required=True)
+    signature.set_defaults(handler=cmd_apply_signature)
     return parser
 
 

@@ -26,6 +26,7 @@ jobs:
       version: ${{ steps.release-tag.outputs.version }}
       prerelease: ${{ steps.release-tag.outputs.prerelease }}
       commit: ${{ steps.release-tag.outputs.commit }}
+      unsigned_artifact_id: ${{ steps.upload-unsigned.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,10 +74,94 @@ jobs:
           name: release-assets
           path: release-assets/
           if-no-files-found: error
+      - name: Upload unsigned installer for signing
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-setup
+          path: release-assets/BelegDock-*-windows-x64-setup.exe
+          if-no-files-found: error
+
+  sign:
+    name: Sign installer (SignPath)
+    needs: build
+    if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+    runs-on: windows-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          persist-credentials: false
+      - name: Submit signing request
+        id: submit
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ needs.build.outputs.unsigned_artifact_id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: release-assets
+      - name: Verify signature
+        id: verify
+        shell: pwsh
+        env:
+          EXPECTED_SIGNER: ${{ vars.SIGNPATH_EXPECTED_SIGNER || 'SignPath Foundation' }}
+        run: |
+          $files = @(Get-ChildItem signed\BelegDock-*-windows-x64-setup.exe)
+          if ($files.Count -ne 1) { throw "Expected exactly one signed installer, found $($files.Count)." }
+          $signature = Get-AuthenticodeSignature -FilePath $files[0].FullName
+          if ($signature.Status -ne 'Valid') { throw "Authenticode status is $($signature.Status), not Valid." }
+          if (-not $signature.SignerCertificate.Subject.Contains($env:EXPECTED_SIGNER)) { throw "Unexpected signer: $($signature.SignerCertificate.Subject)" }
+          if ($null -eq $signature.TimeStamperCertificate) { throw "The signature carries no trusted timestamp." }
+          $subject = $signature.SignerCertificate.Subject
+          $thumbprint = $signature.SignerCertificate.Thumbprint
+          $timestamper = $signature.TimeStamperCertificate.Subject
+          $verifiedAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+          $hash = (Get-FileHash -Algorithm SHA256 -Path $files[0].FullName).Hash.ToLowerInvariant()
+          Write-Host "Signer:      $subject"
+          Write-Host "Thumbprint:  $thumbprint"
+          Write-Host "Timestamper: $timestamper"
+          Write-Host "Verified at: $verifiedAt"
+          Write-Host "SHA-256:     $hash"
+          "subject=$subject" >> $env:GITHUB_OUTPUT
+          "thumbprint=$thumbprint" >> $env:GITHUB_OUTPUT
+          "timestamper=$timestamper" >> $env:GITHUB_OUTPUT
+          "verified_at=$verifiedAt" >> $env:GITHUB_OUTPUT
+          "file=$($files[0].FullName)" >> $env:GITHUB_OUTPUT
+      - name: Rebuild release assets with the signed installer
+        shell: pwsh
+        env:
+          EXPECTED_SIGNER: ${{ vars.SIGNPATH_EXPECTED_SIGNER || 'SignPath Foundation' }}
+          SIGNED_FILE: ${{ steps.verify.outputs.file }}
+          SIGNER_SUBJECT: ${{ steps.verify.outputs.subject }}
+          SIGNER_THUMBPRINT: ${{ steps.verify.outputs.thumbprint }}
+          SIGNER_TIMESTAMPER: ${{ steps.verify.outputs.timestamper }}
+          SIGNER_VERIFIED_AT: ${{ steps.verify.outputs.verified_at }}
+        run: |
+          python packaging/build_windows.py apply-signature --assets release-assets --signed "$env:SIGNED_FILE" --expected-signer "$env:EXPECTED_SIGNER" --subject "$env:SIGNER_SUBJECT" --thumbprint "$env:SIGNER_THUMBPRINT" --timestamper "$env:SIGNER_TIMESTAMPER" --verified-at "$env:SIGNER_VERIFIED_AT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload signed release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-signed
+          path: release-assets/
+          if-no-files-found: error
 
   publish:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, sign]
+    if: ${{ !cancelled() && !failure() && needs.build.result == 'success' && (needs.sign.result == 'success' || (needs.sign.result == 'skipped' && vars.SIGNPATH_ORGANIZATION_ID == '')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -87,7 +172,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: release-assets
+          name: ${{ needs.sign.result == 'success' && 'release-assets-signed' || 'release-assets' }}
           path: release-assets
       - name: Generate checksums
         run: python3 packaging/build_windows.py write-checksums --output release-assets/SHA256SUMS.txt release-assets/*
