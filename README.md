@@ -244,7 +244,10 @@ Umgebung sind nicht nötig.
    Benutzer-PATH ein und legt einen Startmenü-Eintrag „BelegDock“ an. Eine
    Administratorabfrage entfällt. Windows SmartScreen kann trotzdem warnen: bei
    unsignierten Releases, aber auch bei signierten, solange die Datei noch keine
-   Reputation hat (siehe [Codesignatur](#code-signing-policy)).
+   Reputation hat (siehe [Codesignatur](#code-signing-policy)). Für den kleinen
+   Alpha-Kreis: nach dem Prüfen der Prüfsumme die Datei unter „Eigenschaften“ →
+   „Zulassen“ oder mit `Unblock-File` freigeben; dann entfällt die Warnung in der
+   Regel, sonst „Weitere Informationen“ → „Trotzdem ausführen“.
 3. Über das Startmenü „BelegDock“ starten: Beim ersten Start führt die Einrichtung
    in der Anwendung durch Gmail (OAuth-Client-Datei vom Herausgeber, Browser-Anmeldung)
    und Lexware (API-Schlüssel); ein Terminal ist nicht nötig. Alternativ in einer neuen

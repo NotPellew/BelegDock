@@ -17,11 +17,17 @@ Release vergleichen. Bei signierten Releases zusätzlich die Signatur prüfen (s
 
 Installation
 ------------
-1. BelegDock-<Version>-windows-x64-setup.exe starten.
-2. Windows SmartScreen kann eine Warnung zeigen: bei unsignierten Releases und auch
-   bei signierten, solange die Datei noch keine Reputation hat. Dann die Signatur
-   prüfen (siehe "Signatur prüfen") und über "Weitere Informationen" und
-   "Trotzdem ausführen" fortfahren.
+1. Erst die Prüfsumme vergleichen, dann die heruntergeladene Setup-Datei
+   freigeben: Rechtsklick auf die Datei, "Eigenschaften", unten bei
+   "Sicherheit" das Kästchen "Zulassen" ankreuzen, "OK". Alternativ in
+   PowerShell im Download-Ordner:
+   Unblock-File -Path .\BelegDock-<Version>-windows-x64-setup.exe
+   Danach zeigt Windows SmartScreen beim Start in der Regel keine Warnung mehr.
+   Nur Dateien freigeben, deren Prüfsumme mit SHA256SUMS.txt übereinstimmt.
+2. BelegDock-<Version>-windows-x64-setup.exe starten. Warnt SmartScreen trotzdem
+   (unsignierte Releases oder neue signierte Versionen ohne Reputation), über
+   "Weitere Informationen" und "Trotzdem ausführen" fortfahren; bei signierten
+   Releases vorher die Signatur prüfen (siehe "Signatur prüfen").
 3. Der deutsche Assistent installiert nach
    %LOCALAPPDATA%\Programs\BelegDock und trägt dieses Verzeichnis in den
    Benutzer-PATH ein. Ein Neustart der Eingabeaufforderung ist nötig, damit
