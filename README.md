@@ -387,7 +387,6 @@ ein erneuter Live-Nachweis erforderlich sind.
 - [AGENTS.md](AGENTS.md): Arbeitsablauf, Tests, Entwicklungsbefehle und Isolation.
 - [Architektur](docs/arc42.md): Geltungsbereich, Entscheidungen, Grenzen und offene Arbeit.
 - [Signierung einrichten (Issue #39)](docs/issue-39-implementation-plan.md): Checkliste für den Herausgeber (SignPath Foundation).
-- [Issue-Automatisierung](.github/implementation-worker.md): Freigabe, Einrichtung und Grenzen des GitHub-Implementierungsworkers.
 - [Feature-Formular](https://github.com/NotPellew/BelegDock/issues/new?template=feature.yml):
   Arbeit in einem Issue präzisieren; die Liefernachweise bleiben im zugehörigen PR.
 
