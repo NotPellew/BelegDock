@@ -163,6 +163,7 @@ jobs:
     needs: [build, sign]
     if: ${{ !cancelled() && !failure() && needs.build.result == 'success' && (needs.sign.result == 'success' || (needs.sign.result == 'skipped' && vars.SIGNPATH_ORGANIZATION_ID == '')) }}
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:
